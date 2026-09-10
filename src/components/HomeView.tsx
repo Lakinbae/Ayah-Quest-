@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { 
   Play, RotateCcw, Flame, CheckCircle2, ChevronRight, Sparkles, 
   BookOpen, Target, Heart, ShieldAlert, AlertTriangle, Check, Award, Compass, MessageCircle,
-  ArrowRight, ArrowLeft, Share2
+  ArrowRight, ArrowLeft, Share2, Bookmark
 } from 'lucide-react';
 import { UserProfile, TabType, SrsReviewRecord } from '../types';
 import { SURAH_LIST } from '../data/surahList';
 import { MOTIVATIONAL_REFLECTIONS } from '../data/motivationalData';
+import { getAyahBookmark, AyahBookmark } from '../utils/quranUtils';
 
 interface HomeViewProps {
   user: UserProfile;
@@ -21,6 +22,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
 }) => {
   const [reflectionIndex, setReflectionIndex] = useState<number>(0);
   const [copiedMotivation, setCopiedMotivation] = useState<boolean>(false);
+  const [bookmark, setBookmark] = useState<AyahBookmark | null>(() => getAyahBookmark());
 
   useEffect(() => {
     // Pick daily reflection based on date
@@ -152,6 +154,37 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Quick Resume from Saved Bookmark if present */}
+      {bookmark && (
+        <div className="bg-[#faf8f5] dark:bg-stone-900 p-4 rounded-3xl border border-stone-200/90 dark:border-stone-800 shadow-sm flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <Bookmark className="w-5 h-5 fill-current" />
+            </div>
+            <div className="truncate">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                Last Reading Spot
+              </span>
+              <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100 truncate">
+                Surah {bookmark.surahName} : Ayah {bookmark.ayahNumber}
+              </h4>
+              {bookmark.text && (
+                <p className="font-quran text-xs text-stone-500 truncate" dir="rtl">
+                  {bookmark.text}
+                </p>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={() => onNavigate('quran', bookmark.surahNumber)}
+            className="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center gap-1.5 shrink-0 shadow-xs active:scale-95 transition-all"
+          >
+            <span>Resume</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Primary Action Card: Active Memorization Range */}
       <div className="bg-[#faf8f5] dark:bg-stone-900 p-4 rounded-3xl border border-stone-200/90 dark:border-stone-800 shadow-sm">

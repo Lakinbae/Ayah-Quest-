@@ -3,13 +3,20 @@ import {
   Play, Pause, SkipForward, SkipBack, RotateCcw, Volume2, 
   Eye, EyeOff, AlertTriangle, Check, XCircle, Layers, 
   HelpCircle, Settings2, Sparkles, Search, ChevronDown, 
-  Bookmark, Award, Info
+  Bookmark, Award, Info, Share2, CheckCircle2
 } from 'lucide-react';
 import { Ayah, Surah, UserProfile } from '../types';
 import { RECITERS, SURAHS_DATA } from '../data/quranData';
 import { SURAH_LIST } from '../data/surahList';
 import { fetchSurah } from '../data/quranApi';
-import { toArabicDigits } from '../utils/quranUtils';
+import { 
+  toArabicDigits, 
+  getAyahBookmark, 
+  saveAyahBookmark, 
+  removeAyahBookmark, 
+  copyAyahToClipboard, 
+  AyahBookmark 
+} from '../utils/quranUtils';
 
 interface HifzViewProps {
   user?: UserProfile;
@@ -39,13 +46,15 @@ export const HifzView: React.FC<HifzViewProps> = ({
 
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [targetReps, setTargetReps] = useState<number>(3);
+  const [targetReps, setTargetReps] = useState<number>(1);
   const [currentRep, setCurrentRep] = useState<number>(1);
   const [isMasked, setIsMasked] = useState<boolean>(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
   const [showRangeModal, setShowRangeModal] = useState<boolean>(false);
   const [surahSearch, setSurahSearch] = useState<string>('');
   const [showSrsGuide, setShowSrsGuide] = useState<boolean>(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [bookmark, setBookmark] = useState<AyahBookmark | null>(() => getAyahBookmark());
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const currentRepRef = useRef<number>(1);
@@ -54,6 +63,7 @@ export const HifzView: React.FC<HifzViewProps> = ({
   const ayahsRef = useRef<Ayah[]>([]);
   const selectedSurahNumRef = useRef<number>(selectedSurahNum);
   const isPlayingRef = useRef<boolean>(isPlaying);
+  const playbackSpeedRef = useRef<number>(playbackSpeed);
 
   // Sync refs with state
   useEffect(() => {
@@ -75,6 +85,10 @@ export const HifzView: React.FC<HifzViewProps> = ({
   useEffect(() => {
     isPlayingRef.current = isPlaying;
   }, [isPlaying]);
+
+  useEffect(() => {
+    playbackSpeedRef.current = playbackSpeed;
+  }, [playbackSpeed]);
 
   // Load surah data whenever selectedSurahNum changes
   useEffect(() => {
@@ -155,6 +169,7 @@ export const HifzView: React.FC<HifzViewProps> = ({
           const s = String(nextAyah.surahNumber || sNum).padStart(3, '0');
           const a = String(nextAyah.number).padStart(3, '0');
           audio.src = `${reciter.cdnPath}/${s}${a}.mp3`;
+          audio.playbackRate = playbackSpeedRef.current;
           audio.play().then(() => {
             setIsPlaying(true);
           }).catch(() => {});
@@ -174,6 +189,49 @@ export const HifzView: React.FC<HifzViewProps> = ({
       audio.pause();
     };
   }, [reciter.cdnPath]);
+
+  const handleToggleBookmark = () => {
+    if (!currentAyah) return;
+    const sNum = currentAyah.surahNumber || selectedSurahNum;
+    const aNum = currentAyah.number;
+    const sMeta = SURAH_LIST.find((s) => s.number === sNum);
+
+    if (bookmark && bookmark.surahNumber === sNum && bookmark.ayahNumber === aNum) {
+      removeAyahBookmark();
+      setBookmark(null);
+      setToastMessage('Bookmark removed');
+      setTimeout(() => setToastMessage(null), 2000);
+    } else {
+      const newBm: AyahBookmark = {
+        surahNumber: sNum,
+        ayahNumber: aNum,
+        surahName: currentAyah.surahName || sMeta?.englishName || surahData.englishName,
+        text: currentAyah.text,
+        timestamp: new Date().toISOString(),
+      };
+      saveAyahBookmark(newBm);
+      setBookmark(newBm);
+      setToastMessage(`📌 Bookmarked Surah ${newBm.surahName}:${newBm.ayahNumber}`);
+      setTimeout(() => setToastMessage(null), 2200);
+    }
+  };
+
+  const handleShareAyah = async () => {
+    if (!currentAyah) return;
+    const sNum = currentAyah.surahNumber || selectedSurahNum;
+    const sMeta = SURAH_LIST.find((s) => s.number === sNum);
+    const success = await copyAyahToClipboard({
+      text: currentAyah.text,
+      translation: currentAyah.translation,
+      surahNumber: sNum,
+      ayahNumber: currentAyah.number,
+      surahName: currentAyah.surahName || sMeta?.englishName || surahData.englishName,
+    });
+    if (success) {
+      setToastMessage('📋 Ayah quote & translation copied! Ready to share');
+      setTimeout(() => setToastMessage(null), 2200);
+    }
+  };
 
   // Adjust audio playback speed
   useEffect(() => {
@@ -267,7 +325,15 @@ export const HifzView: React.FC<HifzViewProps> = ({
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-stone-900/95 text-white px-4 py-2 rounded-2xl shadow-xl text-xs font-semibold flex items-center gap-2 border border-stone-700 backdrop-blur-md animate-in fade-in slide-in-from-top-2">
+          <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       {/* Header & Change Surah Button */}
       <div className="flex items-center justify-between bg-[#faf8f5] dark:bg-stone-900 p-4 rounded-3xl border border-stone-200/90 dark:border-stone-800 shadow-sm">
         <div className="flex items-center gap-3">
@@ -348,7 +414,17 @@ export const HifzView: React.FC<HifzViewProps> = ({
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold text-stone-700 dark:text-stone-300 flex items-center gap-1.5">
             <RotateCcw className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Repetition Loop: {targetReps === 999 ? '∞' : `${currentRep} of ${targetReps}`}</span>
+            {targetReps === 1 ? (
+              <span className="text-emerald-700 dark:text-emerald-400">
+                Auto-Advance: Plays once & moves to next ayah ⏩
+              </span>
+            ) : targetReps === 999 ? (
+              <span className="text-amber-600 dark:text-amber-400">
+                Continuous Loop: Rep {currentRep} (∞)
+              </span>
+            ) : (
+              <span>Loop Cycle: Rep {currentRep} of {targetReps}</span>
+            )}
           </span>
 
           <div className="flex items-center gap-2">
@@ -376,6 +452,10 @@ export const HifzView: React.FC<HifzViewProps> = ({
                 targetRepsRef.current = reps;
                 setCurrentRep(1);
                 currentRepRef.current = 1;
+                if (reps === 1) {
+                  setToastMessage('⏩ Auto-advance enabled: 1x play then next ayah');
+                  setTimeout(() => setToastMessage(null), 2000);
+                }
               }}
               className={`flex-1 py-1.5 rounded-xl text-xs font-extrabold transition-all ${
                 targetReps === reps
@@ -383,7 +463,7 @@ export const HifzView: React.FC<HifzViewProps> = ({
                   : 'bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700 hover:bg-stone-100'
               }`}
             >
-              {reps === 999 ? '∞' : `${reps}x`}
+              {reps === 1 ? '1x Next' : reps === 999 ? '∞ Loop' : `${reps}x`}
             </button>
           ))}
         </div>
@@ -402,9 +482,40 @@ export const HifzView: React.FC<HifzViewProps> = ({
             <span className="text-xs font-bold text-stone-500 dark:text-stone-400">
               {currentAyah.surahName || surahData.englishName} : Ayah {currentAyah.number}
             </span>
-            <div className="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
-              <Volume2 className="w-3.5 h-3.5 text-emerald-600" />
-              <span className="text-[11px] font-medium">{reciter.name.split(' ')[0]}</span>
+
+            <div className="flex items-center gap-1.5">
+              {/* Bookmark Button */}
+              {(() => {
+                const sNum = currentAyah?.surahNumber || selectedSurahNum;
+                const isBookmarked = bookmark?.surahNumber === sNum && bookmark?.ayahNumber === currentAyah?.number;
+                return (
+                  <button
+                    onClick={handleToggleBookmark}
+                    title={isBookmarked ? 'Remove bookmark' : 'Bookmark this reading spot'}
+                    className={`p-1.5 rounded-xl border transition-all ${
+                      isBookmarked
+                        ? 'bg-emerald-600/15 border-emerald-500/50 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-white dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-500 hover:text-emerald-600'
+                    }`}
+                  >
+                    <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-current' : ''}`} />
+                  </button>
+                );
+              })()}
+
+              {/* Share Quote Button */}
+              <button
+                onClick={handleShareAyah}
+                title="Copy formatted verse quote"
+                className="p-1.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-500 hover:text-emerald-600 transition-all"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+              </button>
+
+              <div className="flex items-center gap-1 text-xs text-stone-500 dark:text-stone-400 pl-1 border-l border-stone-200 dark:border-stone-700">
+                <Volume2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="text-[11px] font-medium">{reciter.name.split(' ')[0]}</span>
+              </div>
             </div>
           </div>
 

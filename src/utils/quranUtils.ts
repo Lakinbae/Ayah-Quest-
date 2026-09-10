@@ -33,3 +33,69 @@ export function cleanAyahText(text: string, surahNumber: number, ayahNumber: num
 
   return text.trim();
 }
+
+export interface AyahBookmark {
+  surahNumber: number;
+  ayahNumber: number;
+  surahName: string;
+  text?: string;
+  timestamp: string;
+}
+
+const BOOKMARK_KEY = 'ayah_quest_current_bookmark';
+
+export function getAyahBookmark(): AyahBookmark | null {
+  try {
+    const raw = localStorage.getItem(BOOKMARK_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveAyahBookmark(bookmark: AyahBookmark): void {
+  try {
+    localStorage.setItem(BOOKMARK_KEY, JSON.stringify(bookmark));
+  } catch (e) {
+    console.warn('Failed to save bookmark:', e);
+  }
+}
+
+export function removeAyahBookmark(): void {
+  try {
+    localStorage.removeItem(BOOKMARK_KEY);
+  } catch {}
+}
+
+export async function copyAyahToClipboard(params: {
+  text: string;
+  translation?: string;
+  surahNumber: number;
+  ayahNumber: number;
+  surahName: string;
+}): Promise<boolean> {
+  const shareText = `﷽\n\n« ${params.text} »\n\n"${params.translation || ''}"\n\n— Surah ${params.surahName} [${params.surahNumber}:${params.ayahNumber}]\n📖 Recite & Memorize on Ayah Quest`;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(shareText);
+      return true;
+    } catch {
+      // fallback below
+    }
+  }
+
+  // Fallback for environments where writeText is restricted
+  try {
+    const textArea = document.createElement('textarea');
+    textArea.value = shareText;
+    document.body.appendChild(textArea);
+    textArea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textArea);
+    return true;
+  } catch (e) {
+    console.warn('Clipboard copy failed:', e);
+    return false;
+  }
+}

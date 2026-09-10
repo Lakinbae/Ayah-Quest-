@@ -1,13 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, Pause, Volume2, Type, Eye, EyeOff, AlertTriangle, 
-  Search, BookOpen, Layers, ChevronLeft, ChevronRight, Loader2, Bookmark 
+  Search, BookOpen, Layers, ChevronLeft, ChevronRight, Loader2, 
+  Bookmark, Share2, SkipBack, SkipForward, X, Check, ArrowRight
 } from 'lucide-react';
 import { Surah, Ayah } from '../types';
 import { RECITERS, SURAHS_DATA } from '../data/quranData';
 import { SURAH_LIST } from '../data/surahList';
 import { fetchSurah, fetchPage } from '../data/quranApi';
-import { toArabicDigits } from '../utils/quranUtils';
+import { 
+  toArabicDigits, 
+  getAyahBookmark, 
+  saveAyahBookmark, 
+  removeAyahBookmark, 
+  copyAyahToClipboard, 
+  AyahBookmark 
+} from '../utils/quranUtils';
 
 interface QuranViewProps {
   currentReciterId: string;
@@ -28,11 +36,43 @@ export const QuranView: React.FC<QuranViewProps> = ({ currentReciterId, initialS
 
   const [fontSize, setFontSize] = useState<number>(28);
   const [playingAyah, setPlayingAyah] = useState<number | null>(null);
+  const [playingSurah, setPlayingSurah] = useState<number | null>(null);
+  const [isAudioPaused, setIsAudioPaused] = useState<boolean>(false);
+  const [autoAdvance, setAutoAdvance] = useState<boolean>(true);
   const [hideMushaf, setHideMushaf] = useState<boolean>(false);
   const [revealedAyahs, setRevealedAyahs] = useState<Record<string, boolean>>({});
 
+  const [bookmark, setBookmark] = useState<AyahBookmark | null>(() => getAyahBookmark());
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const autoAdvanceRef = useRef<boolean>(true);
+  const playingAyahRef = useRef<number | null>(null);
+  const playingSurahRef = useRef<number | null>(null);
+  const currentListRef = useRef<Ayah[]>([]);
+  const selectedSurahRef = useRef<number>(selectedSurah);
+
   const reciter = RECITERS.find((r) => r.id === currentReciterId) || RECITERS[0];
+
+  useEffect(() => {
+    autoAdvanceRef.current = autoAdvance;
+  }, [autoAdvance]);
+
+  useEffect(() => {
+    playingAyahRef.current = playingAyah;
+  }, [playingAyah]);
+
+  useEffect(() => {
+    playingSurahRef.current = playingSurah;
+  }, [playingSurah]);
+
+  useEffect(() => {
+    selectedSurahRef.current = selectedSurah;
+  }, [selectedSurah]);
+
+  useEffect(() => {
+    currentListRef.current = viewMode === 'surah' ? currentSurahData.ayahs : pageAyahs;
+  }, [viewMode, currentSurahData, pageAyahs]);
 
   // Load selected Surah whenever selectedSurah changes in 'surah' mode
   useEffect(() => {
@@ -93,6 +133,10 @@ export const QuranView: React.FC<QuranViewProps> = ({ currentReciterId, initialS
       audioRef.current.pause();
     }
     setPlayingAyah(null);
+    setPlayingSurah(null);
+    setIsAudioPaused(false);
+    playingAyahRef.current = null;
+    playingSurahRef.current = null;
   };
 
   const playAyahAudio = (surahNum: number, ayahNumber: number) => {
@@ -101,9 +145,14 @@ export const QuranView: React.FC<QuranViewProps> = ({ currentReciterId, initialS
     }
     const audio = audioRef.current;
 
-    if (playingAyah === ayahNumber) {
-      audio.pause();
-      setPlayingAyah(null);
+    // Toggle pause/play if already on this exact ayah
+    if (playingAyahRef.current === ayahNumber && (playingSurahRef.current === surahNum || !playingSurahRef.current)) {
+      if (!audio.paused) {
+        audio.pause();
+        setIsAudioPaused(true);
+      } else {
+        audio.play().then(() => setIsAudioPaused(false)).catch(() => {});
+      }
       return;
     }
 
@@ -114,12 +163,132 @@ export const QuranView: React.FC<QuranViewProps> = ({ currentReciterId, initialS
       .play()
       .then(() => {
         setPlayingAyah(ayahNumber);
+        setPlayingSurah(surahNum);
+        setIsAudioPaused(false);
+        playingAyahRef.current = ayahNumber;
+        playingSurahRef.current = surahNum;
       })
       .catch((e) => console.warn('Audio play error:', e));
 
     audio.onended = () => {
-      setPlayingAyah(null);
+      if (!autoAdvanceRef.current) {
+        stopAudio();
+        return;
+      }
+      handlePlayNext();
     };
+  };
+
+  const handlePlayNext = () => {
+    const list = currentListRef.current;
+    const currentA = playingAyahRef.current;
+    const currentS = playingSurahRef.current || selectedSurahRef.current;
+
+    if (!currentA || list.length === 0) {
+      stopAudio();
+      return;
+    }
+
+    const currentIdx = list.findIndex(
+      (item) => item.number === currentA && (item.surahNumber ? item.surahNumber === currentS : true)
+    );
+
+    if (currentIdx !== -1 && currentIdx < list.length - 1) {
+      const nextAyah = list[currentIdx + 1];
+      const nextS = nextAyah.surahNumber || selectedSurahRef.current;
+      playAyahAudio(nextS, nextAyah.number);
+
+      // Smoothly scroll next Ayah into view
+      setTimeout(() => {
+        const el = document.getElementById(`ayah-card-${nextS}-${nextAyah.number}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 50);
+    } else {
+      stopAudio();
+    }
+  };
+
+  const handlePlayPrev = () => {
+    const list = currentListRef.current;
+    const currentA = playingAyahRef.current;
+    const currentS = playingSurahRef.current || selectedSurahRef.current;
+
+    if (!currentA || list.length === 0) return;
+
+    const currentIdx = list.findIndex(
+      (item) => item.number === currentA && (item.surahNumber ? item.surahNumber === currentS : true)
+    );
+
+    if (currentIdx > 0) {
+      const prevAyah = list[currentIdx - 1];
+      const prevS = prevAyah.surahNumber || selectedSurahRef.current;
+      playAyahAudio(prevS, prevAyah.number);
+
+      setTimeout(() => {
+        const el = document.getElementById(`ayah-card-${prevS}-${prevAyah.number}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 50);
+    }
+  };
+
+  const handleToggleBookmark = (ayah: Ayah) => {
+    const aNum = ayah.number;
+    const sNum = ayah.surahNumber || selectedSurah;
+    const sMeta = SURAH_LIST.find((s) => s.number === sNum) || activeSurahMeta;
+
+    if (bookmark && bookmark.surahNumber === sNum && bookmark.ayahNumber === aNum) {
+      removeAyahBookmark();
+      setBookmark(null);
+      setToastMessage('Bookmark removed');
+      setTimeout(() => setToastMessage(null), 2000);
+    } else {
+      const newBm: AyahBookmark = {
+        surahNumber: sNum,
+        ayahNumber: aNum,
+        surahName: ayah.surahName || sMeta.englishName,
+        text: ayah.text,
+        timestamp: new Date().toISOString(),
+      };
+      saveAyahBookmark(newBm);
+      setBookmark(newBm);
+      setToastMessage(`📌 Bookmarked Surah ${newBm.surahName}:${newBm.ayahNumber}`);
+      setTimeout(() => setToastMessage(null), 2200);
+    }
+  };
+
+  const handleShareAyah = async (ayah: Ayah) => {
+    const sNum = ayah.surahNumber || selectedSurah;
+    const sMeta = SURAH_LIST.find((s) => s.number === sNum) || activeSurahMeta;
+    const success = await copyAyahToClipboard({
+      text: ayah.text,
+      translation: ayah.translation,
+      surahNumber: sNum,
+      ayahNumber: ayah.number,
+      surahName: ayah.surahName || sMeta.englishName,
+    });
+    if (success) {
+      setToastMessage('📋 Ayah quote & translation copied! Ready to share');
+      setTimeout(() => setToastMessage(null), 2200);
+    }
+  };
+
+  const handleJumpToBookmark = (bm: AyahBookmark) => {
+    if (viewMode !== 'surah') {
+      setViewMode('surah');
+    }
+    if (selectedSurah !== bm.surahNumber) {
+      setSelectedSurah(bm.surahNumber);
+    }
+    setTimeout(() => {
+      const el = document.getElementById(`ayah-card-${bm.surahNumber}-${bm.ayahNumber}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 300);
   };
 
   const toggleAyahReveal = (key: string) => {
@@ -138,7 +307,41 @@ export const QuranView: React.FC<QuranViewProps> = ({ currentReciterId, initialS
   const activeSurahMeta = SURAH_LIST.find((s) => s.number === selectedSurah) || SURAH_LIST[0];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative">
+      {/* Dynamic Toast Feedback Notification */}
+      {toastMessage && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-stone-900/95 text-white px-4 py-2 rounded-2xl shadow-xl text-xs font-semibold flex items-center gap-2 border border-stone-700 backdrop-blur-md animate-in fade-in slide-in-from-top-2">
+          <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* Quick Bookmark Reading Banner */}
+      {bookmark && (
+        <div className="p-3 bg-emerald-500/10 dark:bg-emerald-950/30 border border-emerald-500/30 rounded-3xl flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-xl bg-emerald-600/20 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <Bookmark className="w-3.5 h-3.5 fill-current" />
+            </div>
+            <div className="truncate">
+              <span className="font-bold text-stone-800 dark:text-stone-200">
+                Bookmarked Spot: Surah {bookmark.surahName}
+              </span>
+              <span className="text-stone-500 dark:text-stone-400 ml-1.5 text-[11px]">
+                (Ayah {bookmark.ayahNumber})
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={() => handleJumpToBookmark(bookmark)}
+            className="px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shrink-0 flex items-center gap-1 shadow-xs active:scale-95 transition-all"
+          >
+            <span>Resume</span>
+            <ArrowRight className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+
       {/* Navigation Mode Switcher: Surah vs Page */}
       <div className="bg-white dark:bg-stone-900 p-4 rounded-3xl border border-stone-200 dark:border-stone-800 shadow-sm space-y-3">
         <div className="flex items-center justify-between">
@@ -282,7 +485,7 @@ export const QuranView: React.FC<QuranViewProps> = ({ currentReciterId, initialS
           </div>
         )}
 
-        {/* Font Size & Adaptive Hide Controls */}
+        {/* Font Size, Auto-Advance & Adaptive Hide Controls */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-stone-100 dark:border-stone-800 text-xs text-stone-500">
           <div className="flex items-center gap-1.5 flex-1 min-w-[150px]">
             <Type className="w-3.5 h-3.5" />
@@ -298,20 +501,40 @@ export const QuranView: React.FC<QuranViewProps> = ({ currentReciterId, initialS
             <span className="font-mono text-[11px] font-bold">{fontSize}px</span>
           </div>
 
-          <button
-            onClick={() => {
-              setHideMushaf(!hideMushaf);
-              setRevealedAyahs({});
-            }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold transition-all text-xs ${
-              hideMushaf
-                ? 'bg-emerald-700 text-white shadow-sm'
-                : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200'
-            }`}
-          >
-            {hideMushaf ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-            {hideMushaf ? 'Adaptive: Hidden (Tap to Peek)' : 'Hide Verses'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                const next = !autoAdvance;
+                setAutoAdvance(next);
+                setToastMessage(next ? '⏩ Auto-advance enabled: Continuous recitation' : '⏸ Auto-advance turned off');
+                setTimeout(() => setToastMessage(null), 2000);
+              }}
+              title="Automatically advance to the next ayah when current ayah finishes"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold transition-all text-xs ${
+                autoAdvance
+                  ? 'bg-emerald-700 text-white shadow-xs'
+                  : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200'
+              }`}
+            >
+              <SkipForward className="w-3.5 h-3.5" />
+              <span>Auto-Next: {autoAdvance ? 'ON' : 'OFF'}</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setHideMushaf(!hideMushaf);
+                setRevealedAyahs({});
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold transition-all text-xs ${
+                hideMushaf
+                  ? 'bg-emerald-700 text-white shadow-sm'
+                  : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200'
+              }`}
+            >
+              {hideMushaf ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+              {hideMushaf ? 'Adaptive: Hidden (Tap to Peek)' : 'Hide Verses'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -335,22 +558,25 @@ export const QuranView: React.FC<QuranViewProps> = ({ currentReciterId, initialS
         <div className="space-y-3">
           {(viewMode === 'surah' ? currentSurahData.ayahs : pageAyahs).map((ayah) => {
             const ayahKey = `${ayah.surahNumber || selectedSurah}_${ayah.number}`;
-            const isThisPlaying = playingAyah === ayah.number;
+            const ayahSurahNum = ayah.surahNumber || selectedSurah;
+            const isThisPlaying = playingAyah === ayah.number && (playingSurah === ayahSurahNum || !playingSurah);
             const isHidden = hideMushaf && !revealedAyahs[ayahKey];
+            const isBookmarked = bookmark?.surahNumber === ayahSurahNum && bookmark?.ayahNumber === ayah.number;
 
             return (
               <div
                 key={ayahKey}
+                id={`ayah-card-${ayahSurahNum}-${ayah.number}`}
                 className={`p-4 rounded-3xl border transition-all ${
                   isThisPlaying
-                    ? 'bg-emerald-50/60 dark:bg-emerald-950/30 border-emerald-500/40 shadow-sm'
+                    ? 'bg-emerald-50/60 dark:bg-emerald-950/30 border-emerald-500/50 ring-1 ring-emerald-500/30 shadow-md'
                     : 'bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-800'
                 }`}
               >
                 <div className="flex items-center justify-between text-xs text-stone-400 mb-2">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-md bg-emerald-500/10 text-[11px]">
-                      {ayah.surahNumber || selectedSurah}:{ayah.number}
+                      {ayahSurahNum}:{ayah.number}
                     </span>
                     {ayah.surahName && viewMode === 'page' && (
                       <span className="text-[11px] font-semibold text-stone-500">
@@ -374,15 +600,40 @@ export const QuranView: React.FC<QuranViewProps> = ({ currentReciterId, initialS
                         {isHidden ? 'Peek' : 'Hide'}
                       </button>
                     )}
+
+                    {/* Bookmark Spot */}
                     <button
-                      onClick={() => playAyahAudio(ayah.surahNumber || selectedSurah, ayah.number)}
+                      onClick={() => handleToggleBookmark(ayah)}
+                      title={isBookmarked ? 'Remove bookmark' : 'Bookmark this reading spot'}
                       className={`p-2 rounded-xl border transition-all ${
-                        isThisPlaying
-                          ? 'bg-emerald-700 text-white border-emerald-700'
-                          : 'bg-stone-50 dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-emerald-50'
+                        isBookmarked
+                          ? 'bg-emerald-600/15 border-emerald-500/50 text-emerald-600 dark:text-emerald-400'
+                          : 'bg-stone-50 dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-500 dark:text-stone-400 hover:text-emerald-600 hover:bg-stone-100'
                       }`}
                     >
-                      {isThisPlaying ? (
+                      <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-current' : ''}`} />
+                    </button>
+
+                    {/* Share / Copy Ayah Quote */}
+                    <button
+                      onClick={() => handleShareAyah(ayah)}
+                      title="Copy formatted verse quote to share"
+                      className="p-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-stone-500 dark:text-stone-400 hover:text-emerald-600 hover:bg-stone-100 transition-all"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                    </button>
+
+                    {/* Play Audio Button */}
+                    <button
+                      onClick={() => playAyahAudio(ayahSurahNum, ayah.number)}
+                      title={isThisPlaying && !isAudioPaused ? 'Pause recitation' : 'Play recitation'}
+                      className={`p-2 rounded-xl border transition-all ${
+                        isThisPlaying && !isAudioPaused
+                          ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+                          : 'bg-stone-50 dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/20'
+                      }`}
+                    >
+                      {isThisPlaying && !isAudioPaused ? (
                         <Pause className="w-3.5 h-3.5 fill-white" />
                       ) : (
                         <Play className="w-3.5 h-3.5 fill-current" />
@@ -450,6 +701,85 @@ export const QuranView: React.FC<QuranViewProps> = ({ currentReciterId, initialS
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Floating Mini Player for Continuous Recitation */}
+      {playingAyah !== null && (
+        <div className="fixed bottom-20 left-0 right-0 z-30 px-3 flex justify-center pointer-events-none">
+          <div className="max-w-md w-full bg-stone-900/95 text-white p-3 rounded-2xl shadow-2xl border border-stone-700 backdrop-blur-md flex items-center justify-between gap-2 pointer-events-auto transition-all animate-in fade-in slide-in-from-bottom-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-emerald-600/30 border border-emerald-500/40 flex items-center justify-center shrink-0">
+                <Volume2 className="w-4 h-4 text-emerald-400 animate-pulse" />
+              </div>
+              <div className="truncate">
+                <p className="text-xs font-bold text-emerald-300 truncate">
+                  Surah {SURAH_LIST.find((s) => s.number === (playingSurah || selectedSurah))?.englishName || activeSurahMeta.englishName}
+                </p>
+                <p className="text-[10px] text-stone-300">
+                  Ayah {playingAyah} of {currentSurahData.numberOfAyahs || currentListRef.current.length}
+                </p>
+              </div>
+            </div>
+
+            {/* Controls */}
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                onClick={handlePlayPrev}
+                title="Previous Ayah"
+                className="p-1.5 rounded-xl text-stone-300 hover:text-white hover:bg-white/10 active:scale-95 transition-colors"
+              >
+                <SkipBack className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={() => {
+                  const s = playingSurah || selectedSurah;
+                  if (s && playingAyah) {
+                    playAyahAudio(s, playingAyah);
+                  }
+                }}
+                title={isAudioPaused ? 'Resume' : 'Pause'}
+                className="p-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs active:scale-95 transition-all"
+              >
+                {isAudioPaused ? <Play className="w-4 h-4 fill-current" /> : <Pause className="w-4 h-4 fill-current" />}
+              </button>
+
+              <button
+                onClick={handlePlayNext}
+                title="Next Ayah"
+                className="p-1.5 rounded-xl text-stone-300 hover:text-white hover:bg-white/10 active:scale-95 transition-colors"
+              >
+                <SkipForward className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={() => {
+                  const next = !autoAdvance;
+                  setAutoAdvance(next);
+                  setToastMessage(next ? '⏩ Auto-advance enabled' : '⏸ Auto-advance turned off');
+                  setTimeout(() => setToastMessage(null), 2000);
+                }}
+                title={autoAdvance ? 'Auto-advance is ON' : 'Auto-advance is OFF'}
+                className={`px-2 py-1 rounded-xl text-[10px] font-bold border transition-colors flex items-center gap-1 ${
+                  autoAdvance
+                    ? 'bg-emerald-500/25 text-emerald-300 border-emerald-500/50'
+                    : 'bg-stone-800 text-stone-400 border-stone-700'
+                }`}
+              >
+                <span>Auto</span>
+                <span className="text-[9px]">{autoAdvance ? 'ON' : 'OFF'}</span>
+              </button>
+
+              <button
+                onClick={stopAudio}
+                title="Stop & close player"
+                className="p-1.5 rounded-xl text-stone-400 hover:text-white hover:bg-white/10 ml-0.5 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
