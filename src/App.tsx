@@ -4,9 +4,9 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Flame, Moon, Sun, Sparkles, Shield, Mic } from 'lucide-react';
-import { TabType, UserProfile, Ayah, TelebirrPaymentRequest, SrsReviewRecord } from './types';
-import { SURAHS_DATA, RECITERS } from './data/quranData';
+import { Flame, Moon, Sun } from 'lucide-react';
+import { TabType, UserProfile, Ayah, SrsReviewRecord } from './types';
+import { SURAHS_DATA } from './data/quranData';
 
 import { Navigation } from './components/Navigation';
 import { HomeView } from './components/HomeView';
@@ -16,11 +16,7 @@ import { QuizView } from './components/QuizView';
 import { ProgressView } from './components/ProgressView';
 import { ProfileView } from './components/ProfileView';
 
-import { ProModal } from './components/ProModal';
-import { AdminModal } from './components/AdminModal';
 import { RecallModesModal } from './components/RecallModesModal';
-import { RecitationModal } from './components/RecitationModal';
-import { VoiceSearchModal } from './components/VoiceSearchModal';
 
 const DEFAULT_USER: UserProfile = {
   id: 'hafiz-' + Math.floor(100000 + Math.random() * 900000),
@@ -29,7 +25,6 @@ const DEFAULT_USER: UserProfile = {
   last_name: '',
   username: 'hafiz_seeker',
   bio: 'Bismillah — Striving to memorize the Holy Quran for the sake of Allah.',
-  is_pro: false,
   current_streak: 0,
   best_streak: 0,
   today_reviewed: 0,
@@ -78,24 +73,8 @@ export default function App() {
     return [];
   });
 
-  // Telebirr payment queue
-  const [telebirrRequests, setTelebirrRequests] = useState<TelebirrPaymentRequest[]>(() => {
-    const saved = localStorage.getItem('ayah_telebirr_requests_v4');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {}
-    }
-    return [];
-  });
-
   // Modals state
-  const [isProModalOpen, setIsProModalOpen] = useState<boolean>(false);
-  const [isAdminModalOpen, setIsAdminModalOpen] = useState<boolean>(false);
   const [isRecallModalOpen, setIsRecallModalOpen] = useState<boolean>(false);
-  const [isRecitationModalOpen, setIsRecitationModalOpen] = useState<boolean>(false);
-  const [isVoiceSearchOpen, setIsVoiceSearchOpen] = useState<boolean>(false);
-  const [activeAyahForRecitation, setActiveAyahForRecitation] = useState<Ayah>(SURAHS_DATA[1].ayahs[0]);
   const [recallAyahs, setRecallAyahs] = useState<Ayah[]>(SURAHS_DATA[1].ayahs);
 
   // Sync user changes to localStorage
@@ -107,11 +86,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('ayah_srs_records_v1', JSON.stringify(srsRecords));
   }, [srsRecords]);
-
-  // Sync telebirr requests
-  useEffect(() => {
-    localStorage.setItem('ayah_telebirr_requests_v4', JSON.stringify(telebirrRequests));
-  }, [telebirrRequests]);
 
   // Global Theme application (light / dark / system)
   useEffect(() => {
@@ -207,34 +181,6 @@ export default function App() {
     });
   };
 
-  // Telebirr payment submission (status = 'pending')
-  const handleSubmitTelebirr = (reqData: Omit<TelebirrPaymentRequest, 'id' | 'status' | 'created_at'>) => {
-    const newReq: TelebirrPaymentRequest = {
-      ...reqData,
-      id: `tb-${Date.now()}`,
-      status: 'pending',
-      created_at: new Date().toISOString(),
-    };
-    setTelebirrRequests((prev) => [newReq, ...prev]);
-  };
-
-  // Admin Manual Approval
-  const handleApproveTelebirr = (id: string, telegramId: number) => {
-    setTelebirrRequests((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: 'approved' } : r))
-    );
-    // If approved, unlock Pro access for the user
-    if (telegramId === user.telegram_id || user.telegram_id === 6545688842) {
-      setUser((prev) => ({ ...prev, is_pro: true }));
-    }
-  };
-
-  const handleRejectTelebirr = (id: string) => {
-    setTelebirrRequests((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: 'rejected' } : r))
-    );
-  };
-
   const handleNavigate = (tab: TabType, targetSurah?: number) => {
     if (targetSurah) {
       setTargetHifzSurah(targetSurah);
@@ -261,33 +207,20 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            {/* Voice Search Button */}
-            <button
-              onClick={() => setIsVoiceSearchOpen(true)}
-              title="Voice Search Quran (Recite or speak an Ayah)"
-              className="p-2 rounded-full bg-emerald-600/10 border border-emerald-600/20 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-600/20 transition-all active:scale-95 shadow-xs"
-            >
-              <Mic className="w-4 h-4" />
-            </button>
-
+          <div className="flex items-center gap-2">
             {/* Streak Counter */}
             <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-400 text-xs font-black shadow-xs">
               <Flame className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
               <span>{user.current_streak}</span>
             </div>
 
-            {/* Pro Badge */}
+            {/* Quick Theme Toggle */}
             <button
-              id="header-pro-badge"
-              onClick={() => setIsProModalOpen(true)}
-              className={`px-2.5 py-1 rounded-full text-[11px] font-black tracking-wider transition-all shadow-xs ${
-                user.is_pro
-                  ? 'bg-amber-400/20 text-amber-700 dark:text-amber-400 border border-amber-400/40'
-                  : 'bg-emerald-600/10 border border-emerald-600/20 text-emerald-800 dark:text-emerald-300 hover:scale-102'
-              }`}
+              onClick={() => handleToggleTheme(user.theme === 'dark' ? 'light' : 'dark')}
+              title="Toggle Theme"
+              className="p-1.5 rounded-full bg-stone-200/70 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white transition-all shadow-xs"
             >
-              {user.is_pro ? 'PRO' : 'GET PRO'}
+              {user.theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
           </div>
         </div>
@@ -300,7 +233,6 @@ export default function App() {
             user={user}
             srsRecords={srsRecords}
             onNavigate={handleNavigate}
-            onOpenPro={() => setIsProModalOpen(true)}
           />
         )}
 
@@ -313,15 +245,10 @@ export default function App() {
             onSurahChange={(surahNum) => setTargetHifzSurah(surahNum)}
             onReciterChange={handleReciterChange}
             onLogReview={handleLogReview}
-            onOpenRecitation={(ayah) => {
-              setActiveAyahForRecitation(ayah);
-              setIsRecitationModalOpen(true);
-            }}
             onOpenRecallModes={(ayahs) => {
               setRecallAyahs(ayahs);
               setIsRecallModalOpen(true);
             }}
-            onOpenPro={() => setIsProModalOpen(true)}
           />
         )}
 
@@ -343,8 +270,6 @@ export default function App() {
         {activeTab === 'profile' && (
           <ProfileView
             user={user}
-            onOpenPro={() => setIsProModalOpen(true)}
-            onOpenAdmin={() => setIsAdminModalOpen(true)}
             onToggleTheme={handleToggleTheme}
             currentReciterId={user.preferred_reciter}
             onReciterChange={handleReciterChange}
@@ -361,54 +286,14 @@ export default function App() {
           setTargetHifzSurah(undefined);
           setActiveTab(tab);
         }}
-        onOpenPro={() => setIsProModalOpen(true)}
-        isPro={user.is_pro}
       />
 
-      {/* Modals */}
-      <ProModal
-        isOpen={isProModalOpen}
-        onClose={() => setIsProModalOpen(false)}
-        onSubmitTelebirr={handleSubmitTelebirr}
-        onActivateProInstant={() => setUser((prev) => ({ ...prev, is_pro: true }))}
-        isPro={user.is_pro}
-        user={user}
-      />
-
-      <AdminModal
-        isOpen={isAdminModalOpen}
-        onClose={() => setIsAdminModalOpen(false)}
-        requests={telebirrRequests}
-        onApprove={handleApproveTelebirr}
-        onReject={handleRejectTelebirr}
-      />
-
+      {/* Interactive Active Recall Modes Modal (Word masking, first-letter hint, tap-to-reveal) */}
       <RecallModesModal
         isOpen={isRecallModalOpen}
         onClose={() => setIsRecallModalOpen(false)}
         ayahs={recallAyahs}
         currentReciterId={user.preferred_reciter}
-      />
-
-      <RecitationModal
-        isOpen={isRecitationModalOpen}
-        onClose={() => setIsRecitationModalOpen(false)}
-        ayah={activeAyahForRecitation}
-        onLogReview={handleLogReview}
-      />
-
-      <VoiceSearchModal
-        isOpen={isVoiceSearchOpen}
-        onClose={() => setIsVoiceSearchOpen(false)}
-        onSelectAyah={(surahNum, ayahNum) => {
-          setIsVoiceSearchOpen(false);
-          const foundAyah = SURAHS_DATA[surahNum]?.ayahs?.find((a) => a.number === ayahNum);
-          if (foundAyah) {
-            setActiveAyahForRecitation(foundAyah);
-          }
-          setTargetHifzSurah(surahNum);
-          setActiveTab('quran');
-        }}
       />
     </div>
   );

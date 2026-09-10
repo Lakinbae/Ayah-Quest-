@@ -15,15 +15,6 @@ export interface Ayah {
   mutashabihat?: MutashabihVerse[];
 }
 
-export interface VoiceSearchResult {
-  surahNumber: number;
-  surahName: string;
-  ayahNumber: number;
-  text: string;
-  translation: string;
-  confidence: number;
-}
-
 export interface HifzPlan {
   targetSurahNumber: number;
   targetDays: number;
@@ -70,7 +61,6 @@ export interface UserProfile {
   last_name?: string;
   username: string;
   bio?: string;
-  is_pro: boolean;
   current_streak: number;
   best_streak: number;
   today_reviewed: number;
@@ -87,19 +77,6 @@ export interface Reciter {
   name: string;
   style: string;
   cdnPath: string;
-}
-
-export interface TelebirrPaymentRequest {
-  id: string;
-  telegram_id: number;
-  username: string;
-  full_name: string;
-  amount: number;
-  reference_number: string;
-  screenshot_url?: string;
-  screenshot_base64?: string;
-  status: 'pending' | 'approved' | 'rejected';
-  created_at: string;
 }
 
 export type TabType = 'home' | 'hifz' | 'quran' | 'quiz' | 'progress' | 'profile';

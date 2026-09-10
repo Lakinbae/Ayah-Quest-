@@ -1,55 +1,51 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Play, RotateCcw, Flame, CheckCircle2, ChevronRight, Sparkles, 
-  BookOpen, Target, Heart, ShieldAlert, AlertTriangle, Check, Award, Compass, MessageCircle
+  BookOpen, Target, Heart, ShieldAlert, AlertTriangle, Check, Award, Compass, MessageCircle,
+  ArrowRight, ArrowLeft, Share2
 } from 'lucide-react';
 import { UserProfile, TabType, SrsReviewRecord } from '../types';
 import { SURAH_LIST } from '../data/surahList';
+import { MOTIVATIONAL_REFLECTIONS } from '../data/motivationalData';
 
 interface HomeViewProps {
   user: UserProfile;
   srsRecords: SrsReviewRecord[];
   onNavigate: (tab: TabType, targetSurah?: number) => void;
-  onOpenPro: () => void;
 }
-
-const DAILY_REFLECTIONS = [
-  {
-    arabic: 'خَيْرُكُمْ مَنْ تَعَلَّمَ الْقُرْآنَ وَعَلَّمَهُ',
-    source: 'Sahih Al-Bukhari',
-    translation: 'The best among you are those who learn the Quran and teach it.',
-    tadabbur: 'Every verse you memorize is a crown of light for your parents and an elevation of rank in Jannah.'
-  },
-  {
-    arabic: 'إِنَّ الَّذِي لَيْسَ فِي جَوْفِهِ شَيْءٌ مِنَ الْقُرْآنِ كَالْبَيْتِ الْخَرِبِ',
-    source: 'Sunan At-Tirmidhi',
-    translation: 'One who has nothing of the Quran inside him is like a ruined house.',
-    tadabbur: 'Build a fortress of light in your chest today with even just three verses.'
-  },
-  {
-    arabic: 'يُقَالُ لِصَاحِبِ الْقُرْآنِ: اقْرَأْ وَارْتَقِ وَرَتِّلْ كَمَا كُنْتَ تُرَتِّلُ فِي الدُّنْيَا',
-    source: 'Abu Dawud & At-Tirmidhi',
-    translation: 'It will be said to the companion of the Quran: Read, ascend, and recite as you used to recite in the world.',
-    tadabbur: 'Your eternal station in the highest gardens of Paradise is determined by the last verse you recite.'
-  }
-];
 
 export const HomeView: React.FC<HomeViewProps> = ({
   user,
   srsRecords,
   onNavigate,
-  onOpenPro,
 }) => {
   const [reflectionIndex, setReflectionIndex] = useState<number>(0);
-  const [showExitMotivation, setShowExitMotivation] = useState<boolean>(false);
+  const [copiedMotivation, setCopiedMotivation] = useState<boolean>(false);
 
   useEffect(() => {
     // Pick daily reflection based on date
     const day = new Date().getDate();
-    setReflectionIndex(day % DAILY_REFLECTIONS.length);
+    setReflectionIndex(day % MOTIVATIONAL_REFLECTIONS.length);
   }, []);
 
-  const reflection = DAILY_REFLECTIONS[reflectionIndex];
+  const reflection = MOTIVATIONAL_REFLECTIONS[reflectionIndex];
+
+  const handleNextMotivation = () => {
+    setReflectionIndex((prev) => (prev + 1) % MOTIVATIONAL_REFLECTIONS.length);
+  };
+
+  const handlePrevMotivation = () => {
+    setReflectionIndex((prev) => (prev - 1 + MOTIVATIONAL_REFLECTIONS.length) % MOTIVATIONAL_REFLECTIONS.length);
+  };
+
+  const handleShareMotivation = () => {
+    const text = `«${reflection.arabic}»\n"${reflection.translation}"\n(${reflection.source})\n\n— Read on Ayah Quest`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setCopiedMotivation(true);
+      setTimeout(() => setCopiedMotivation(false), 2000);
+    }
+  };
 
   const percentComplete = (user?.daily_goal || 5) > 0 
     ? Math.min(100, Math.round(((user?.today_reviewed || 0) / (user?.daily_goal || 5)) * 100))
@@ -64,14 +60,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
   return (
     <div className="space-y-4">
       {/* Daily Spiritual Heart Connection Card: آية اليوم ونور القلب */}
-      <div className="bg-[#f7f5ef] dark:bg-stone-900 p-4 rounded-3xl border border-amber-600/20 dark:border-stone-800 shadow-xs space-y-2.5">
+      <div className="bg-[#f7f5ef] dark:bg-stone-900 p-4 rounded-3xl border border-amber-600/20 dark:border-stone-800 shadow-xs space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-400 font-bold text-xs">
             <Heart className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-            <span>نور اليوم • Heart Connection with Allah</span>
+            <span>نور اليوم • Daily Reflection</span>
           </div>
-          <span className="text-[10px] text-stone-500 dark:text-stone-400 font-semibold">
-            {reflection.source}
+          <span className="text-[10px] text-amber-900 dark:text-amber-300 font-semibold bg-amber-500/15 px-2 py-0.5 rounded-full">
+            {reflection.theme}
           </span>
         </div>
 
@@ -79,13 +75,48 @@ export const HomeView: React.FC<HomeViewProps> = ({
           «{reflection.arabic}»
         </p>
 
-        <p className="text-xs text-stone-700 dark:text-stone-300 italic text-center">
+        <p className="text-xs text-stone-700 dark:text-stone-300 italic text-center leading-relaxed">
           "{reflection.translation}"
         </p>
 
-        <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-stone-700 dark:text-stone-300 flex items-start gap-1.5">
+        <p className="text-[10px] text-stone-500 dark:text-stone-400 text-center font-medium">
+          — {reflection.source}
+        </p>
+
+        <div className="p-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-stone-700 dark:text-stone-300 flex items-start gap-2">
           <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-          <span><strong>Spiritual Reminder:</strong> {reflection.tadabbur}</span>
+          <span><strong>Actionable Tip:</strong> {reflection.practicalTip}</span>
+        </div>
+
+        {/* Carousel controls & share */}
+        <div className="flex items-center justify-between pt-1 border-t border-amber-600/10 text-xs">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handlePrevMotivation}
+              title="Previous motivation"
+              className="p-1.5 rounded-lg text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 hover:bg-stone-200/50 dark:hover:bg-stone-800 transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+            </button>
+            <span className="text-[10px] text-stone-400 font-medium px-1">
+              {reflectionIndex + 1} / {MOTIVATIONAL_REFLECTIONS.length}
+            </span>
+            <button
+              onClick={handleNextMotivation}
+              title="Next motivation"
+              className="p-1.5 rounded-lg text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 hover:bg-stone-200/50 dark:hover:bg-stone-800 transition-colors"
+            >
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <button
+            onClick={handleShareMotivation}
+            className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:underline px-2 py-1 rounded-lg"
+          >
+            <Share2 className="w-3 h-3" />
+            <span>{copiedMotivation ? 'Copied to Clipboard!' : 'Share Verse'}</span>
+          </button>
         </div>
       </div>
 
@@ -297,29 +328,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
           Recite 1 Last Ayah
         </button>
       </div>
-
-      {/* Pro Banner */}
-      {!user.is_pro && (
-        <div
-          onClick={onOpenPro}
-          className="cursor-pointer bg-[#faf8f5] dark:bg-stone-900 p-4 rounded-3xl border border-amber-500/30 flex items-center justify-between shadow-xs hover:border-amber-500 transition-all"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-400/20 text-amber-500 flex items-center justify-center font-bold text-lg">
-              ⭐
-            </div>
-            <div>
-              <h4 className="text-xs font-extrabold text-stone-900 dark:text-stone-100">
-                Ayah Quest Pro: Advanced Linguistic & I'rab Morphology
-              </h4>
-              <p className="text-[10px] text-stone-500 dark:text-stone-400">
-                Deep Arabic root analysis • 50 ETB Telebirr or 20 Telegram Stars
-              </p>
-            </div>
-          </div>
-          <ChevronRight className="w-4 h-4 text-amber-500" />
-        </div>
-      )}
     </div>
   );
 };

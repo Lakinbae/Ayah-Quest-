@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, Pause, SkipForward, SkipBack, RotateCcw, Volume2, 
-  Eye, EyeOff, AlertTriangle, Check, XCircle, Mic, Layers, 
+  Eye, EyeOff, AlertTriangle, Check, XCircle, Layers, 
   HelpCircle, Settings2, Sparkles, Search, ChevronDown, 
-  Bookmark, Award, Info, Lock
+  Bookmark, Award, Info
 } from 'lucide-react';
 import { Ayah, Surah, UserProfile } from '../types';
 import { RECITERS, SURAHS_DATA } from '../data/quranData';
@@ -18,9 +18,7 @@ interface HifzViewProps {
   onSurahChange?: (surahNum: number) => void;
   onReciterChange?: (id: string) => void;
   onLogReview: (ayah: Ayah, result: 'perfect' | 'hesitant' | 'weak') => void;
-  onOpenRecitation: (ayah: Ayah) => void;
   onOpenRecallModes: (ayahs: Ayah[]) => void;
-  onOpenPro?: () => void;
 }
 
 export const HifzView: React.FC<HifzViewProps> = ({
@@ -31,9 +29,7 @@ export const HifzView: React.FC<HifzViewProps> = ({
   onSurahChange,
   onReciterChange,
   onLogReview,
-  onOpenRecitation,
   onOpenRecallModes,
-  onOpenPro,
 }) => {
   const initialSurahNum = initialSurah || targetSurahNum || user?.target_surah || 1;
   const [selectedSurahNum, setSelectedSurahNum] = useState<number>(initialSurahNum);
@@ -49,7 +45,6 @@ export const HifzView: React.FC<HifzViewProps> = ({
   const [showRangeModal, setShowRangeModal] = useState<boolean>(false);
   const [surahSearch, setSurahSearch] = useState<string>('');
   const [showSrsGuide, setShowSrsGuide] = useState<boolean>(false);
-  const [showProWordNotice, setShowProWordNotice] = useState<boolean>(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const currentRepRef = useRef<number>(1);
@@ -590,84 +585,30 @@ export const HifzView: React.FC<HifzViewProps> = ({
         </div>
       </div>
 
-      {/* Free 100% Feature Access: Live Recitation & 7 Recall Modes */}
-     {/* <div className="grid grid-cols-2 gap-2">
+      {/* Active Recall Testing (Word masking, first-letter hint, tap-to-reveal) */}
+      <div className="pt-1">
         <button
-          onClick={() => onOpenRecitation(currentAyah)}
-          className="p-3.5 rounded-2xl bg-[#faf8f5] dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-emerald-600 text-stone-800 dark:text-stone-200 text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all"
-        >
-        {/*  <Mic className="w-4 h-4 text-emerald-600" />
-          <span>Recitation Mic Test</span>
-        </button>
-*/}
-      {/*  <button
           onClick={() => onOpenRecallModes(ayahs)}
-          className="p-3.5 rounded-2xl bg-[#faf8f5] dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-amber-500 text-stone-800 dark:text-stone-200 text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all"
+          className="w-full p-4 rounded-3xl bg-white dark:bg-stone-900 border border-emerald-600/30 hover:border-emerald-500 text-stone-800 dark:text-stone-100 font-bold flex items-center justify-between shadow-xs transition-all active:scale-98"
         >
-          */}
-          
-          <Layers className="w-4 h-4 text-amber-600" />
-          <span>7 Active Recall Modes</span>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 flex items-center justify-center">
+              <Layers className="w-5 h-5" />
+            </div>
+            <div className="text-left">
+              <p className="text-xs font-bold text-stone-900 dark:text-stone-100">
+                Interactive Memory Testing
+              </p>
+              <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                Mask words, blur verses & test recall without audio assistance
+              </p>
+            </div>
+          </div>
+          <span className="text-xs px-3 py-1.5 rounded-xl bg-emerald-700 text-white font-bold shadow-xs">
+            Start Recall
+          </span>
         </button>
       </div>
-
-      {/* Pro Extreme Feature Teaser */}
-   {/*   <div className="p-3 bg-gradient-to-r from-emerald-900/10 to-amber-900/10 rounded-2xl border border-stone-200 dark:border-stone-800 flex items-center justify-between text-xs">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-amber-500" />
-          <div>
-            <span className="font-bold text-stone-900 dark:text-stone-100">Word-by-Word Grammatical Analysis</span>
-            <p className="text-[10px] text-stone-500 dark:text-stone-400">Deep Arabic root & I'rab linguistic breakdown</p>
-          </div>
-        </div>
-        <button
-          onClick={() => {
-            if (user?.is_pro) {
-              alert('✨ Ayah Quest Pro Active: Word-by-word linguistic morphology unlocked for this verse.');
-            } else if (onOpenPro) {
-              onOpenPro();
-            } else {
-              setShowProWordNotice(true);
-            }
-          }}
-          className="px-2.5 py-1.5 rounded-xl bg-amber-400/20 text-amber-600 dark:text-amber-400 font-black text-[11px] border border-amber-400/30 flex items-center gap-1"
-        >
-          {!user?.is_pro && <Lock className="w-3 h-3" />}
-          <span>{user?.is_pro ? 'Explore' : 'PRO'}</span>
-        </button>
-      </div>
-
-      {/* Pro Modal Notice if Clicked */}
-     {/* {showProWordNotice && (
-        <div className="p-4 bg-white dark:bg-stone-900 rounded-3xl border border-amber-500/30 shadow-lg space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-black uppercase text-amber-600 flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5" /> Ayah Quest Pro Feature
-            </span>
-            <button
-              onClick={() => setShowProWordNotice(false)}
-              className="text-stone-400 hover:text-stone-600 text-xs"
-            >
-              ✕
-            </button>
-          </div>
-          <p className="text-xs text-stone-700 dark:text-stone-300">
-            Word-by-Word Grammatical I'rab & Root Analysis is part of <strong>Ayah Quest Pro</strong>.
-          </p>
-          <p className="text-[11px] text-stone-500 dark:text-stone-400">
-            All core memorization, 114 Surahs, audio repetitions, and all 7 Active Recall modes remain <strong>100% free</strong> for everyone.
-          </p>
-          <button
-            onClick={() => {
-              setShowProWordNotice(false);
-              onOpenPro();
-            }}
-            className="w-full py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs shadow-xs"
-          >
-            Upgrade to Pro (50 ETB / 20 Stars)
-          </button>
-        </div>*/}
-      )}
     </div>
   );
 };

@@ -2,6 +2,12 @@ import { Reciter, Surah } from '../types';
 
 export const RECITERS: Reciter[] = [
   {
+    id: 'ar.jaber_alqaitan',
+    name: 'جابر القيطان (Jaber Al-Qaitan)',
+    style: 'Heartfelt, reverent & melodic Murattal recitation',
+    cdnPath: 'https://everyayah.com/data/Ali_Jaber_64kbps'
+  },
+  {
     id: 'ar.alafasy',
     name: 'Mishary Rashid Alafasy',
     style: 'Murattal with resonant cadence',

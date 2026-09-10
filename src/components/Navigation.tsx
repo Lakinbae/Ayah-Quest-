@@ -5,15 +5,11 @@ import { TabType } from '../types';
 interface NavigationProps {
   activeTab: TabType;
   onTabChange: (tab: TabType) => void;
-  onOpenPro: () => void;
-  isPro: boolean;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({
   activeTab,
   onTabChange,
-  onOpenPro,
-  isPro
 }) => {
   const tabs = [
     { id: 'home' as TabType, label: 'Home', icon: Home },

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { 
-  User, Shield, Moon, Sun, Monitor, Star, ExternalLink, 
-  CheckCircle2, ChevronRight, Lock, Edit3, Target, BookOpen, 
-  Trash2, Save, X, RotateCcw, Award, Volume2, Key, Download, Archive, Code
+  User, Moon, Sun, Monitor, ExternalLink, 
+  CheckCircle2, ChevronRight, Edit3, Target, BookOpen, 
+  Trash2, Save, X, RotateCcw, Award, Volume2
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { RECITERS } from '../data/quranData';
@@ -10,8 +10,6 @@ import { SURAH_LIST } from '../data/surahList';
 
 interface ProfileViewProps {
   user: UserProfile;
-  onOpenPro: () => void;
-  onOpenAdmin: () => void;
   onToggleTheme: (theme: 'light' | 'dark' | 'system') => void;
   currentReciterId: string;
   onReciterChange: (id: string) => void;
@@ -21,8 +19,6 @@ interface ProfileViewProps {
 
 export const ProfileView: React.FC<ProfileViewProps> = ({
   user,
-  onOpenPro,
-  onOpenAdmin,
   onToggleTheme,
   currentReciterId,
   onReciterChange,
@@ -37,8 +33,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [targetSurah, setTargetSurah] = useState<number>(user?.target_surah || 1);
   const [dailyGoal, setDailyGoal] = useState<number>(user?.daily_goal || 5);
   const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
-  const [adminTapCount, setAdminTapCount] = useState<number>(0);
-  const [showAdminPanel, setShowAdminPanel] = useState<boolean>(user?.telegram_id === 6545688842);
 
   const selectedTargetMeta = SURAH_LIST.find((s) => s.number === (user?.target_surah || 1)) || SURAH_LIST[0];
 
@@ -55,15 +49,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       daily_goal: dailyGoal,
     });
     setIsEditing(false);
-  };
-
-  const handleSecretAdminTap = () => {
-    const next = adminTapCount + 1;
-    setAdminTapCount(next);
-    if (next >= 5) {
-      setShowAdminPanel(true);
-      alert('🔓 Admin Moderation Panel unlocked.');
-    }
   };
 
   return (
@@ -95,15 +80,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               <h2 className="text-base font-extrabold text-stone-900 dark:text-stone-100">
                 {user.first_name} {user.last_name || ''}
               </h2>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-wide ${
-                  user.is_pro
-                    ? 'bg-amber-400/20 text-amber-600 dark:text-amber-400 border border-amber-400/30'
-                    : 'bg-stone-200/80 dark:bg-stone-800 text-stone-600 dark:text-stone-400'
-                }`}
-              >
-                {user.is_pro ? 'PRO MEMBER' : 'FREE PLAN'}
-              </span>
             </div>
             <p className="text-xs text-stone-500 dark:text-stone-400">@{user.username || 'hafiz_seeker'}</p>
             {user.bio ? (
@@ -380,89 +356,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
         )}
       </div>
-      
 
-      {/* Project Export & Direct ZIP Download */}
-  {  /* <div className="bg-[#faf8f5] dark:bg-stone-900 p-4 rounded-3xl border border-emerald-600/20 dark:border-stone-800 shadow-xs space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Archive className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-            <h3 className="text-xs font-bold text-stone-900 dark:text-stone-100">
-              Export App & ZIP Packages
-            </h3>
-          </div>
-          <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-full">
-            Ready to deploy
-          </span>
-        </div>
-        <p className="text-[11px] text-stone-600 dark:text-stone-400 leading-relaxed">
-          Download clean, fully packaged ZIP archives to push to GitHub or deploy directly to Cloudflare Pages.
-        </p>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {/* Source Code ZIP */}
-        {/*  <a
-            href="/ayah-quest-source.zip"
-            download="ayah-quest-source.zip"
-            className="p-3 rounded-2xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 hover:border-emerald-500 transition-all flex items-center justify-between group"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 flex items-center justify-center">
-                <Code className="w-4 h-4" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-stone-900 dark:text-stone-100">Source Code ZIP</p>
-                <p className="text-[10px] text-stone-500">For GitHub & Cloudflare</p>
-              </div>
-            </div>
-            <Download className="w-4 h-4 text-emerald-600 group-hover:translate-y-0.5 transition-transform" />
-          </a>
-
-          {/* Compiled Dist ZIP */}
-        {/*  <a
-            href="/ayah-quest-dist.zip"
-            download="ayah-quest-dist.zip"
-            className="p-3 rounded-2xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 hover:border-emerald-500 transition-all flex items-center justify-between group"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 flex items-center justify-center">
-                <Archive className="w-4 h-4" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-stone-900 dark:text-stone-100">Compiled Dist ZIP</p>
-                <p className="text-[10px] text-stone-500">Drag & drop to Cloudflare</p>
-              </div>
-            </div>
-            <Download className="w-4 h-4 text-amber-600 group-hover:translate-y-0.5 transition-transform" />
-          </a>
-        </div>
-      </div>
-*/}
-      {/* Hidden Admin Moderation Panel (Shown only to authorized admin ID 6545688842 or via unlock) */}
-    {/*  {showAdminPanel && (
-        <div className="bg-[#faf8f5] dark:bg-stone-900 p-4 rounded-3xl border border-emerald-600/30 shadow-xs space-y-2 animate-in fade-in">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Lock className="w-4 h-4 text-emerald-600" />
-              <h3 className="text-xs font-bold text-stone-900 dark:text-stone-100">
-                Admin Telebirr Moderation Panel
-              </h3>
-            </div>
-            <span className="text-[10px] text-emerald-700 font-mono font-bold">Admin ID Verified</span>
-          </div>
-          <p className="text-[11px] text-stone-600 dark:text-stone-400">
-            Review incoming payment screenshots, verify transaction reference numbers, and approve Pro accounts.
-          </p>
-          <button
-            onClick={onOpenAdmin}
-            className="w-full py-2.5 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-xs"
-          >
-            <span>Open Telebirr Review Queue</span>
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-*/}
       {/* Discreet Version & Support Footer */}
       <div className="text-center pt-2 space-y-1">
         <a
@@ -475,11 +369,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           <span className="font-bold text-emerald-600 dark:text-emerald-400">@luck_7n</span>
           <ExternalLink className="w-3 h-3" />
         </a>
-        <p
-          onClick={handleSecretAdminTap}
-          className="text-[10px] text-stone-400 cursor-pointer select-none"
-        >
-          آيَة • Ayah Quest v2.1
+        <p className="text-[10px] text-stone-400 select-none">
+          آيَة • Ayah Quest
         </p>
       </div>
     </div>
