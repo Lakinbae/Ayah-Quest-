@@ -591,7 +591,7 @@ export const HifzView: React.FC<HifzViewProps> = ({
       </div>
 
       {/* Free 100% Feature Access: Live Recitation & 7 Recall Modes */}
-      <div className="grid grid-cols-2 gap-2">
+     {/* <div className="grid grid-cols-2 gap-2">
         <button
           onClick={() => onOpenRecitation(currentAyah)}
           className="p-3.5 rounded-2xl bg-[#faf8f5] dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-emerald-600 text-stone-800 dark:text-stone-200 text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all"
@@ -600,10 +600,12 @@ export const HifzView: React.FC<HifzViewProps> = ({
           <span>Recitation Mic Test</span>
         </button>
 */}
-        <button
+      {/*  <button
           onClick={() => onOpenRecallModes(ayahs)}
           className="p-3.5 rounded-2xl bg-[#faf8f5] dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-amber-500 text-stone-800 dark:text-stone-200 text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all"
         >
+          */}
+          
           <Layers className="w-4 h-4 text-amber-600" />
           <span>7 Active Recall Modes</span>
         </button>
