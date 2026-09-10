@@ -612,7 +612,7 @@ export const HifzView: React.FC<HifzViewProps> = ({
       </div>
 
       {/* Pro Extreme Feature Teaser */}
-      <div className="p-3 bg-gradient-to-r from-emerald-900/10 to-amber-900/10 rounded-2xl border border-stone-200 dark:border-stone-800 flex items-center justify-between text-xs">
+   {/*   <div className="p-3 bg-gradient-to-r from-emerald-900/10 to-amber-900/10 rounded-2xl border border-stone-200 dark:border-stone-800 flex items-center justify-between text-xs">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-amber-500" />
           <div>
@@ -638,7 +638,7 @@ export const HifzView: React.FC<HifzViewProps> = ({
       </div>
 
       {/* Pro Modal Notice if Clicked */}
-      {showProWordNotice && (
+     {/* {showProWordNotice && (
         <div className="p-4 bg-white dark:bg-stone-900 rounded-3xl border border-amber-500/30 shadow-lg space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-black uppercase text-amber-600 flex items-center gap-1">
@@ -666,7 +666,7 @@ export const HifzView: React.FC<HifzViewProps> = ({
           >
             Upgrade to Pro (50 ETB / 20 Stars)
           </button>
-        </div>
+        </div>*/}
       )}
     </div>
   );
