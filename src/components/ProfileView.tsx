@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   User, Shield, Moon, Sun, Monitor, Star, ExternalLink, 
   CheckCircle2, ChevronRight, Lock, Edit3, Target, BookOpen, 
-  Trash2, Save, X, RotateCcw, Award, Volume2, Key
+  Trash2, Save, X, RotateCcw, Award, Volume2, Key, Download, Archive, Code
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { RECITERS } from '../data/quranData';
@@ -379,6 +379,62 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             </div>
           </div>
         )}
+      </div>
+
+      {/* Project Export & Direct ZIP Download */}
+      <div className="bg-[#faf8f5] dark:bg-stone-900 p-4 rounded-3xl border border-emerald-600/20 dark:border-stone-800 shadow-xs space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Archive className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            <h3 className="text-xs font-bold text-stone-900 dark:text-stone-100">
+              Export App & ZIP Packages
+            </h3>
+          </div>
+          <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-full">
+            Ready to deploy
+          </span>
+        </div>
+        <p className="text-[11px] text-stone-600 dark:text-stone-400 leading-relaxed">
+          Download clean, fully packaged ZIP archives to push to GitHub or deploy directly to Cloudflare Pages.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {/* Source Code ZIP */}
+          <a
+            href="/ayah-quest-source.zip"
+            download="ayah-quest-source.zip"
+            className="p-3 rounded-2xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 hover:border-emerald-500 transition-all flex items-center justify-between group"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 flex items-center justify-center">
+                <Code className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-stone-900 dark:text-stone-100">Source Code ZIP</p>
+                <p className="text-[10px] text-stone-500">For GitHub & Cloudflare</p>
+              </div>
+            </div>
+            <Download className="w-4 h-4 text-emerald-600 group-hover:translate-y-0.5 transition-transform" />
+          </a>
+
+          {/* Compiled Dist ZIP */}
+          <a
+            href="/ayah-quest-dist.zip"
+            download="ayah-quest-dist.zip"
+            className="p-3 rounded-2xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 hover:border-emerald-500 transition-all flex items-center justify-between group"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 flex items-center justify-center">
+                <Archive className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-stone-900 dark:text-stone-100">Compiled Dist ZIP</p>
+                <p className="text-[10px] text-stone-500">Drag & drop to Cloudflare</p>
+              </div>
+            </div>
+            <Download className="w-4 h-4 text-amber-600 group-hover:translate-y-0.5 transition-transform" />
+          </a>
+        </div>
       </div>
 
       {/* Hidden Admin Moderation Panel (Shown only to authorized admin ID 6545688842 or via unlock) */}
