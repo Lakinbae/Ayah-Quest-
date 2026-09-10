@@ -380,9 +380,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
         )}
       </div>
+      
 
       {/* Project Export & Direct ZIP Download */}
-      <div className="bg-[#faf8f5] dark:bg-stone-900 p-4 rounded-3xl border border-emerald-600/20 dark:border-stone-800 shadow-xs space-y-3">
+  {  /* <div className="bg-[#faf8f5] dark:bg-stone-900 p-4 rounded-3xl border border-emerald-600/20 dark:border-stone-800 shadow-xs space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Archive className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
@@ -400,7 +401,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {/* Source Code ZIP */}
-          <a
+        {/*  <a
             href="/ayah-quest-source.zip"
             download="ayah-quest-source.zip"
             className="p-3 rounded-2xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 hover:border-emerald-500 transition-all flex items-center justify-between group"
@@ -418,7 +419,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </a>
 
           {/* Compiled Dist ZIP */}
-          <a
+        {/*  <a
             href="/ayah-quest-dist.zip"
             download="ayah-quest-dist.zip"
             className="p-3 rounded-2xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 hover:border-emerald-500 transition-all flex items-center justify-between group"
@@ -436,9 +437,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </a>
         </div>
       </div>
-
+*/}
       {/* Hidden Admin Moderation Panel (Shown only to authorized admin ID 6545688842 or via unlock) */}
-      {showAdminPanel && (
+    {/*  {showAdminPanel && (
         <div className="bg-[#faf8f5] dark:bg-stone-900 p-4 rounded-3xl border border-emerald-600/30 shadow-xs space-y-2 animate-in fade-in">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -461,7 +462,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </button>
         </div>
       )}
-
+*/}
       {/* Discreet Version & Support Footer */}
       <div className="text-center pt-2 space-y-1">
         <a
