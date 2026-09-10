@@ -365,12 +365,12 @@ export const QuizView: React.FC = () => {
 
       {/* Main Question Card or Final Result */}
       {!isFinished ? (
-        <div className="bg-white dark:bg-stone-900 p-5 rounded-3xl border border-stone-200 dark:border-stone-800 shadow-sm space-y-4">
-          <div className="flex items-center justify-between text-xs text-stone-400">
-            <span className="font-bold text-stone-600 dark:text-stone-300">
+        <div className="bg-[#faf8f5] dark:bg-stone-900 p-5 rounded-3xl border border-stone-200/90 dark:border-stone-800 shadow-xs space-y-4">
+          <div className="flex items-center justify-between text-xs text-stone-500 dark:text-stone-400">
+            <span className="font-bold text-stone-700 dark:text-stone-300">
               Question {currentQIndex + 1} of {currentQuestions.length}
             </span>
-            <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold text-[11px]">
+            <span className="px-2.5 py-0.5 rounded-full bg-emerald-600/10 text-emerald-800 dark:text-emerald-300 font-bold text-[11px] border border-emerald-600/20">
               {activeMode === 'fill_blank' && 'Missing Word'}
               {activeMode === 'next_ayah' && 'Sequence Recall'}
               {activeMode === 'identify_surah' && 'Surah Identification'}
@@ -378,18 +378,18 @@ export const QuizView: React.FC = () => {
             </span>
           </div>
 
-          <p className="text-xs font-semibold text-stone-700 dark:text-stone-300 leading-relaxed">
+          <p className="text-xs font-bold text-stone-800 dark:text-stone-200 leading-relaxed">
             {q.prompt}
           </p>
 
           {/* Prompt Verse Snippet */}
           {q.arabicSnippet && (
-            <div className="p-4 bg-emerald-500/5 dark:bg-emerald-950/20 rounded-2xl border border-emerald-500/10 text-center">
-              <p className="font-quran text-xl md:text-2xl text-stone-900 dark:text-stone-100 leading-loose" dir="rtl">
+            <div className="p-4 bg-white dark:bg-stone-850 rounded-2xl border border-stone-200/90 dark:border-stone-750 text-center shadow-xs">
+              <p className="font-quran text-2xl md:text-3xl text-emerald-950 dark:text-emerald-50 leading-loose" dir="rtl">
                 {q.arabicSnippet}
               </p>
               {q.translation && (
-                <p className="text-xs text-stone-500 dark:text-stone-400 mt-2 italic">
+                <p className="text-xs text-stone-600 dark:text-stone-400 mt-2 italic">
                   "{q.translation}"
                 </p>
               )}

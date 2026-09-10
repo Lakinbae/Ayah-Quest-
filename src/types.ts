@@ -50,6 +50,19 @@ export interface SurahMetadata {
   startPage: number;
 }
 
+export interface SrsReviewRecord {
+  id: string; // `${surahNumber}_${ayahNumber}`
+  surahNumber: number;
+  ayahNumber: number;
+  surahName: string;
+  text: string;
+  translation?: string;
+  rating: 'perfect' | 'hesitant' | 'weak';
+  reviewedAt: string;
+  nextReviewAt: string;
+  repetitionCount: number;
+}
+
 export interface UserProfile {
   id: string;
   telegram_id: number;
@@ -84,6 +97,7 @@ export interface TelebirrPaymentRequest {
   amount: number;
   reference_number: string;
   screenshot_url?: string;
+  screenshot_base64?: string;
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
 }

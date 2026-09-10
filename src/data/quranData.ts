@@ -8,6 +8,30 @@ export const RECITERS: Reciter[] = [
     cdnPath: 'https://everyayah.com/data/Alafasy_128kbps'
   },
   {
+    id: 'ar.alijaber',
+    name: 'Ali Jaber (علي جابر)',
+    style: 'Legendary Imam of Masjid Al-Haram, emotive cadence',
+    cdnPath: 'https://everyayah.com/data/Ali_Jaber_64kbps'
+  },
+  {
+    id: 'ar.qatami',
+    name: 'Nasser Al-Qatami (ناصر القطامي)',
+    style: 'Deep & touching contemporary Murattal',
+    cdnPath: 'https://everyayah.com/data/Nasser_Alqatami_128kbps'
+  },
+  {
+    id: 'ar.muaiqly',
+    name: 'Maher Al-Muaiqly (ماهر المعيقلي)',
+    style: 'Imam of Masjid Al-Haram, steady & melodic',
+    cdnPath: 'https://everyayah.com/data/MaherAlMuaiqly128kbps'
+  },
+  {
+    id: 'ar.dossari',
+    name: 'Yasser Al-Dossari (ياسر الدوسري)',
+    style: 'Inspiring & powerful Hijazi recitation',
+    cdnPath: 'https://everyayah.com/data/Yasser_Ad-Dussary_128kbps'
+  },
+  {
     id: 'ar.husary',
     name: 'Mahmoud Khalil Al-Husary',
     style: 'Tajweed reference & measured speed',
