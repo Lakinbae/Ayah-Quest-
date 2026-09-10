@@ -1,0 +1,6 @@
+{
+  "name": "آيَة | Ayah Quest",
+  "description": "Telegram Quran Hifz and memorization companion with smart SRS review, audio repetitions, active recall, and recitation practice.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ayah-backend1",
+  "main": "worker.js",
+  "compatibility_date": "2024-09-01",
+  "vars": {
+    "ADMIN_TELEGRAM_ID": "6545688842",
+    "FRONTEND_URL": "https://quran-ayah-quiz.vercel.app",
+    "SUPPORT_USERNAME": "@luck_7n",
+    "TELEBIRR_NUMBER": "0938054751",
+    "TELEBIRR_NAME": "Lakin",
+    "PRO_STARS": "20",
+    "TELEBIRR_ETB": "50"
+  }
+}
