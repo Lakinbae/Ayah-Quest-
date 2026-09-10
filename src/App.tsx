@@ -17,6 +17,13 @@ import { ProgressView } from './components/ProgressView';
 import { ProfileView } from './components/ProfileView';
 
 import { RecallModesModal } from './components/RecallModesModal';
+import {
+  syncUserProfileToCloud,
+  fetchUserProfileFromCloud,
+  syncSrsRecordsToCloud,
+  fetchSrsRecordsFromCloud,
+  isSupabaseConfigured,
+} from './lib/supabase';
 
 const DEFAULT_USER: UserProfile = {
   id: 'hafiz-' + Math.floor(100000 + Math.random() * 900000),
@@ -101,7 +108,7 @@ export default function App() {
     }
   }, [user.theme]);
 
-  // Telegram Mini App viewport initialization
+  // Telegram Mini App viewport & user identity initialization
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp;
     if (tg) {
@@ -109,8 +116,51 @@ export default function App() {
       tg.expand();
       if (tg.setHeaderColor) tg.setHeaderColor('#064e3b');
       if (tg.setBackgroundColor) tg.setBackgroundColor('#0a0908');
+
+      // Detect real Telegram user identity if available
+      const tgUser = tg.initDataUnsafe?.user;
+      if (tgUser && tgUser.id) {
+        setUser((prev) => {
+          const updated = {
+            ...prev,
+            telegram_id: tgUser.id,
+            first_name: tgUser.first_name || prev.first_name,
+            last_name: tgUser.last_name || prev.last_name,
+            username: tgUser.username || prev.username,
+          };
+          return updated;
+        });
+
+        // If Supabase is active, restore user's saved data from cloud
+        if (isSupabaseConfigured) {
+          fetchUserProfileFromCloud(tgUser.id).then((cloudProfile) => {
+            if (cloudProfile) {
+              setUser((prev) => ({ ...prev, ...cloudProfile }));
+            }
+          });
+          fetchSrsRecordsFromCloud(tgUser.id).then((cloudSrs) => {
+            if (cloudSrs && cloudSrs.length > 0) {
+              setSrsRecords(cloudSrs);
+            }
+          });
+        }
+      }
     }
   }, []);
+
+  // Sync user changes to cloud in the background if Supabase is configured
+  useEffect(() => {
+    if (isSupabaseConfigured && user.telegram_id) {
+      syncUserProfileToCloud(user);
+    }
+  }, [user]);
+
+  // Sync SRS records to cloud in the background
+  useEffect(() => {
+    if (isSupabaseConfigured && user.telegram_id && srsRecords.length > 0) {
+      syncSrsRecordsToCloud(user.telegram_id, srsRecords);
+    }
+  }, [srsRecords, user.telegram_id]);
 
   const handleToggleTheme = (theme: 'light' | 'dark' | 'system') => {
     setUser((prev) => ({ ...prev, theme }));
