@@ -7,6 +7,7 @@ import { Surah, Ayah } from '../types';
 import { RECITERS, SURAHS_DATA } from '../data/quranData';
 import { SURAH_LIST } from '../data/surahList';
 import { fetchSurah, fetchPage } from '../data/quranApi';
+import { toArabicDigits } from '../utils/quranUtils';
 
 interface QuranViewProps {
   currentReciterId: string;
@@ -322,15 +323,6 @@ export const QuranView: React.FC<QuranViewProps> = ({ currentReciterId, initialS
         </div>
       )}
 
-      {/* Bismillah Banner (Except Surah 9 At-Tawbah) */}
-      {!isLoading && viewMode === 'surah' && selectedSurah !== 9 && (
-        <div className="text-center py-4 bg-emerald-500/5 dark:bg-emerald-950/20 rounded-2xl border border-emerald-500/10 shadow-sm">
-          <p className="font-quran text-2xl text-emerald-900 dark:text-emerald-300" dir="rtl">
-            بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
-          </p>
-        </div>
-      )}
-
       {/* Page Header info when in page mode */}
       {!isLoading && viewMode === 'page' && pageSurahNames.length > 0 && (
         <div className="px-4 py-2 bg-stone-100 dark:bg-stone-850 rounded-2xl text-xs text-center text-stone-600 dark:text-stone-300 font-bold border border-stone-200 dark:border-stone-800">
@@ -409,8 +401,11 @@ export const QuranView: React.FC<QuranViewProps> = ({ currentReciterId, initialS
                     dir="rtl"
                   >
                     {ayah.text}{' '}
-                    <span className="inline-block text-xs font-serif text-emerald-600 dark:text-emerald-400 mx-1 border border-emerald-500/30 rounded-full w-6 h-6 leading-6 text-center">
-                      ۝{ayah.number}
+                    <span className="inline-flex items-center justify-center relative mx-1 align-middle text-emerald-700 dark:text-emerald-400 select-none">
+                      <span className="text-[1.3em] font-serif leading-none">۝</span>
+                      <span className="absolute inset-0 flex items-center justify-center text-[0.46em] font-sans font-bold leading-none text-emerald-800 dark:text-emerald-300 pointer-events-none mt-[-1px]">
+                        {toArabicDigits(ayah.number)}
+                      </span>
                     </span>
                   </p>
                   {isHidden && (

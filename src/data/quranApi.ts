@@ -1,6 +1,7 @@
 import { Ayah, Surah } from '../types';
 import { SURAHS_DATA } from './quranData';
 import { SURAH_LIST } from './surahList';
+import { cleanAyahText } from '../utils/quranUtils';
 
 // In-memory caches
 const surahCache: Record<number, Surah> = { ...SURAHS_DATA };
@@ -59,7 +60,7 @@ export async function fetchSurah(surahNumber: number): Promise<Surah> {
           number: a.numberInSurah,
           surahNumber: surahNumber,
           surahName: meta.englishName,
-          text: a.text,
+          text: cleanAyahText(a.text, surahNumber, a.numberInSurah),
           translation: enAyah.text || '',
         };
       });
@@ -157,7 +158,7 @@ export async function fetchPage(pageNumber: number): Promise<{ pageNumber: numbe
           number: a.numberInSurah,
           surahNumber: sNum,
           surahName: sName,
-          text: a.text,
+          text: cleanAyahText(a.text, sNum, a.numberInSurah),
           translation: enAyah.text || '',
         };
       });

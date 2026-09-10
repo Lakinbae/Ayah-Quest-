@@ -9,6 +9,7 @@ import { Ayah, Surah, UserProfile } from '../types';
 import { RECITERS, SURAHS_DATA } from '../data/quranData';
 import { SURAH_LIST } from '../data/surahList';
 import { fetchSurah } from '../data/quranApi';
+import { toArabicDigits } from '../utils/quranUtils';
 
 interface HifzViewProps {
   user?: UserProfile;
@@ -414,7 +415,13 @@ export const HifzView: React.FC<HifzViewProps> = ({
                 className="font-quran text-2xl md:text-3xl text-stone-900 dark:text-stone-100 leading-loose transition-all select-none"
                 dir="rtl"
               >
-                {currentAyah.text}
+                {currentAyah.text}{' '}
+                <span className="inline-flex items-center justify-center relative mx-1 align-middle text-emerald-700 dark:text-emerald-400 select-none">
+                  <span className="text-[1.3em] font-serif leading-none">۝</span>
+                  <span className="absolute inset-0 flex items-center justify-center text-[0.46em] font-sans font-bold leading-none text-emerald-800 dark:text-emerald-300 pointer-events-none mt-[-1px]">
+                    {toArabicDigits(currentAyah.number)}
+                  </span>
+                </span>
               </p>
             </div>
           ) : (

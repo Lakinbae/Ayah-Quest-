@@ -372,22 +372,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         <p className="text-[10px] text-stone-400 select-none">
           آيَة • Ayah Quest
         </p>
-
-        {/* Bot Official Avatar preview and download */}
-        <div className="pt-2 flex justify-center">
-          <a
-            href="/bot-avatar.jpg"
-            download="ayah-quest-bot-avatar.jpg"
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 text-[11px] text-stone-600 dark:text-stone-300 hover:text-emerald-600 hover:border-emerald-500/50 transition-all shadow-2xs"
-          >
-            <img 
-              src="/bot-avatar.jpg" 
-              alt="Ayah Quest Bot Avatar" 
-              className="w-4 h-4 rounded-full object-cover border border-emerald-500/40" 
-            />
-            <span>Download Official Bot Avatar (.jpg)</span>
-          </a>
-        </div>
       </div>
     </div>
   );
