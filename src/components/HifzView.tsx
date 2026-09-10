@@ -596,10 +596,10 @@ export const HifzView: React.FC<HifzViewProps> = ({
           onClick={() => onOpenRecitation(currentAyah)}
           className="p-3.5 rounded-2xl bg-[#faf8f5] dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-emerald-600 text-stone-800 dark:text-stone-200 text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all"
         >
-          <Mic className="w-4 h-4 text-emerald-600" />
+        {/*  <Mic className="w-4 h-4 text-emerald-600" />
           <span>Recitation Mic Test</span>
         </button>
-
+*/}
         <button
           onClick={() => onOpenRecallModes(ayahs)}
           className="p-3.5 rounded-2xl bg-[#faf8f5] dark:bg-stone-900 border border-stone-200/90 dark:border-stone-800 hover:border-amber-500 text-stone-800 dark:text-stone-200 text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all"
