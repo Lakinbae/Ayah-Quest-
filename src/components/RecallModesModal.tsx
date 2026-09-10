@@ -176,7 +176,7 @@ export const RecallModesModal: React.FC<RecallModesModalProps> = ({
               className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
                 activeMode === m.id
                   ? 'bg-emerald-700 text-white shadow-xs scale-102'
-                  : 'bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-750 hover:bg-stone-100'
+                  : 'bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700 hover:bg-stone-100'
               }`}
             >
               {m.name}
@@ -204,7 +204,7 @@ export const RecallModesModal: React.FC<RecallModesModalProps> = ({
         </div>
 
         {/* Current Verse Active Recall Display */}
-        <div className="bg-white dark:bg-stone-850 p-6 rounded-3xl border border-stone-200/90 dark:border-stone-750 text-center min-h-[200px] flex flex-col justify-center items-center relative shadow-xs">
+        <div className="bg-white dark:bg-stone-800 p-6 rounded-3xl border border-stone-200/90 dark:border-stone-700 text-center min-h-[200px] flex flex-col justify-center items-center relative shadow-xs">
           <div className="flex items-center justify-between w-full mb-3 text-xs text-stone-500 dark:text-stone-400">
             <span className="font-bold">
               {currentAyah.surahName} : Ayah {currentAyah.number} ({ayahIndex + 1} of {customOrder.length})

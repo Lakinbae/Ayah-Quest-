@@ -162,7 +162,7 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ user, srsRecords }) 
 
             return (
               <div key={idx} className="space-y-1.5">
-                <div className="h-20 bg-stone-200/60 dark:bg-stone-850 rounded-xl flex items-end justify-center p-1">
+                <div className="h-20 bg-stone-200/60 dark:bg-stone-800 rounded-xl flex items-end justify-center p-1">
                   <div
                     className={`w-full rounded-lg transition-all ${
                       item.isToday 
@@ -206,7 +206,7 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ user, srsRecords }) 
         </div>
 
         {totalGraded === 0 ? (
-          <div className="p-4 rounded-2xl bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-800 text-center space-y-1">
+          <div className="p-4 rounded-2xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-800 text-center space-y-1">
             <p className="text-xs font-semibold text-stone-700 dark:text-stone-300">
               No verses graded in your review ledger yet.
             </p>

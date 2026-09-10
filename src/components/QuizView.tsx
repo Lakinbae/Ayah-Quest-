@@ -325,7 +325,7 @@ export const QuizView: React.FC = () => {
             className={`py-2 px-2.5 rounded-xl font-bold transition-all text-center ${
               activeMode === 'fill_blank'
                 ? 'bg-emerald-700 text-white shadow-sm'
-                : 'bg-stone-100 dark:bg-stone-850 text-stone-700 dark:text-stone-300 hover:bg-stone-200'
+                : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200'
             }`}
           >
             Fill in Blank
@@ -335,7 +335,7 @@ export const QuizView: React.FC = () => {
             className={`py-2 px-2.5 rounded-xl font-bold transition-all text-center ${
               activeMode === 'next_ayah'
                 ? 'bg-emerald-700 text-white shadow-sm'
-                : 'bg-stone-100 dark:bg-stone-850 text-stone-700 dark:text-stone-300 hover:bg-stone-200'
+                : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200'
             }`}
           >
             Next Ayah
@@ -345,7 +345,7 @@ export const QuizView: React.FC = () => {
             className={`py-2 px-2.5 rounded-xl font-bold transition-all text-center ${
               activeMode === 'identify_surah'
                 ? 'bg-emerald-700 text-white shadow-sm'
-                : 'bg-stone-100 dark:bg-stone-850 text-stone-700 dark:text-stone-300 hover:bg-stone-200'
+                : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200'
             }`}
           >
             Identify Surah
@@ -355,7 +355,7 @@ export const QuizView: React.FC = () => {
             className={`py-2 px-2.5 rounded-xl font-bold transition-all text-center ${
               activeMode === 'word_order'
                 ? 'bg-emerald-700 text-white shadow-sm'
-                : 'bg-stone-100 dark:bg-stone-850 text-stone-700 dark:text-stone-300 hover:bg-stone-200'
+                : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200'
             }`}
           >
             Word Scramble
@@ -384,12 +384,27 @@ export const QuizView: React.FC = () => {
 
           {/* Prompt Verse Snippet */}
           {q.arabicSnippet && (
-            <div className="p-4 bg-white dark:bg-stone-850 rounded-2xl border border-stone-200/90 dark:border-stone-750 text-center shadow-xs">
-              <p className="font-quran text-2xl md:text-3xl text-emerald-950 dark:text-emerald-50 leading-loose" dir="rtl">
-                {q.arabicSnippet}
+            <div className="p-5 bg-emerald-50/50 dark:bg-stone-800 rounded-2xl border border-emerald-500/20 dark:border-stone-700 text-center shadow-xs">
+              <p className="font-quran text-2xl md:text-3xl text-stone-900 dark:text-emerald-200 leading-loose select-none" dir="rtl">
+                {q.arabicSnippet.includes('________') ? (
+                  <>
+                    {q.arabicSnippet.split('________').map((part, pIdx, arr) => (
+                      <React.Fragment key={pIdx}>
+                        <span>{part}</span>
+                        {pIdx < arr.length - 1 && (
+                          <span className="inline-flex items-center justify-center px-3 py-0.5 mx-1.5 rounded-lg border-2 border-dashed border-emerald-500/80 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-sans text-xs font-bold align-middle tracking-wider select-none">
+                            [ ؟ ]
+                          </span>
+                        )}
+                      </React.Fragment>
+                    ))}
+                  </>
+                ) : (
+                  q.arabicSnippet
+                )}
               </p>
               {q.translation && (
-                <p className="text-xs text-stone-600 dark:text-stone-400 mt-2 italic">
+                <p className="text-xs text-stone-600 dark:text-stone-300 mt-2 italic font-normal">
                   "{q.translation}"
                 </p>
               )}
@@ -403,7 +418,7 @@ export const QuizView: React.FC = () => {
                 const isThisSelected = selectedAnswer === option;
                 const isCorrect = option === q.correctAnswer;
 
-                let btnStyle = 'border-stone-200 dark:border-stone-800 text-stone-800 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-850';
+                let btnStyle = 'border-stone-200 dark:border-stone-800 text-stone-800 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-800';
 
                 if (isAnswered) {
                   if (isCorrect) {
@@ -442,7 +457,7 @@ export const QuizView: React.FC = () => {
             /* Word Order Scramble Mode UI */
             <div className="space-y-4">
               {/* Target Assembly Area */}
-              <div className="p-4 bg-stone-50 dark:bg-stone-850 rounded-2xl border-2 border-dashed border-stone-200 dark:border-stone-700 min-h-[70px] flex flex-wrap items-center justify-center gap-2" dir="rtl">
+              <div className="p-4 bg-stone-50 dark:bg-stone-800 rounded-2xl border-2 border-dashed border-stone-200 dark:border-stone-700 min-h-[70px] flex flex-wrap items-center justify-center gap-2" dir="rtl">
                 {constructedWords.length === 0 ? (
                   <span className="text-xs text-stone-400">
                     Tap the scrambled words below in the correct sequence...
@@ -481,7 +496,7 @@ export const QuizView: React.FC = () => {
           {isAnswered && (
             <div className="pt-2 space-y-3">
               {q.explanation && (
-                <div className="p-3 rounded-2xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 text-xs text-stone-600 dark:text-stone-300">
+                <div className="p-3 rounded-2xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-800 text-xs text-stone-600 dark:text-stone-300">
                   <span className="font-bold text-emerald-600">💡 Insight: </span>
                   {q.explanation}
                 </div>
@@ -513,7 +528,7 @@ export const QuizView: React.FC = () => {
             </p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 inline-block px-8">
+          <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-800 inline-block px-8">
             <span className="text-xs uppercase font-bold text-stone-400 block">Your Score</span>
             <span className="text-3xl font-black text-emerald-700 dark:text-emerald-400">
               {score} / {currentQuestions.length}

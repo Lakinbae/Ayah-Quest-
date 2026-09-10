@@ -142,7 +142,7 @@ export const QuranView: React.FC<QuranViewProps> = ({ currentReciterId, initialS
       {/* Navigation Mode Switcher: Surah vs Page */}
       <div className="bg-white dark:bg-stone-900 p-4 rounded-3xl border border-stone-200 dark:border-stone-800 shadow-sm space-y-3">
         <div className="flex items-center justify-between">
-          <div className="flex bg-stone-100 dark:bg-stone-850 p-1 rounded-2xl border border-stone-200 dark:border-stone-800">
+          <div className="flex bg-stone-100 dark:bg-stone-800 p-1 rounded-2xl border border-stone-200 dark:border-stone-800">
             <button
               onClick={() => {
                 stopAudio();
@@ -192,7 +192,7 @@ export const QuranView: React.FC<QuranViewProps> = ({ currentReciterId, initialS
                   placeholder="Filter 114 Surahs (e.g. Kahf, 36, Yasin)..."
                   value={surahSearch}
                   onChange={(e) => setSurahSearch(e.target.value)}
-                  className="w-full pl-8 pr-3 py-2 text-xs rounded-xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-none focus:border-emerald-600"
+                  className="w-full pl-8 pr-3 py-2 text-xs rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-none focus:border-emerald-600"
                 />
               </div>
 
@@ -202,7 +202,7 @@ export const QuranView: React.FC<QuranViewProps> = ({ currentReciterId, initialS
                   stopAudio();
                   setSelectedSurah(Number(e.target.value));
                 }}
-                className="px-3 py-2 rounded-xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-700 text-xs font-bold text-stone-900 dark:text-stone-100 focus:outline-none focus:border-emerald-600 max-w-[160px]"
+                className="px-3 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-xs font-bold text-stone-900 dark:text-stone-100 focus:outline-none focus:border-emerald-600 max-w-[160px]"
               >
                 {filteredSurahs.map((s) => (
                   <option key={s.number} value={s.number}>
@@ -229,7 +229,7 @@ export const QuranView: React.FC<QuranViewProps> = ({ currentReciterId, initialS
                 setPageInput(String(Math.max(1, currentPage - 1)));
               }}
               disabled={currentPage <= 1}
-              className="p-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-850 disabled:opacity-30 hover:bg-stone-100"
+              className="p-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 disabled:opacity-30 hover:bg-stone-100"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -251,7 +251,7 @@ export const QuranView: React.FC<QuranViewProps> = ({ currentReciterId, initialS
                     }
                   }
                 }}
-                className="w-14 px-2 py-1 text-center font-mono font-bold text-xs rounded-lg bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-700"
+                className="w-14 px-2 py-1 text-center font-mono font-bold text-xs rounded-lg bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700"
               />
               <span className="text-stone-400">/ 604</span>
               <button
@@ -275,7 +275,7 @@ export const QuranView: React.FC<QuranViewProps> = ({ currentReciterId, initialS
                 setPageInput(String(Math.min(604, currentPage + 1)));
               }}
               disabled={currentPage >= 604}
-              className="p-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-850 disabled:opacity-30 hover:bg-stone-100"
+              className="p-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 disabled:opacity-30 hover:bg-stone-100"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -325,7 +325,7 @@ export const QuranView: React.FC<QuranViewProps> = ({ currentReciterId, initialS
 
       {/* Page Header info when in page mode */}
       {!isLoading && viewMode === 'page' && pageSurahNames.length > 0 && (
-        <div className="px-4 py-2 bg-stone-100 dark:bg-stone-850 rounded-2xl text-xs text-center text-stone-600 dark:text-stone-300 font-bold border border-stone-200 dark:border-stone-800">
+        <div className="px-4 py-2 bg-stone-100 dark:bg-stone-800 rounded-2xl text-xs text-center text-stone-600 dark:text-stone-300 font-bold border border-stone-200 dark:border-stone-800">
           Page {currentPage} • Surah: {pageSurahNames.join(', ')}
         </div>
       )}

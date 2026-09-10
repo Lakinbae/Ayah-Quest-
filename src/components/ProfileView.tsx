@@ -65,7 +65,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             setDailyGoal(user.daily_goal || 5);
             setIsEditing(!isEditing);
           }}
-          className="absolute top-4 right-4 p-2 rounded-xl bg-white dark:bg-stone-800 hover:bg-stone-100 dark:hover:bg-stone-750 text-stone-700 dark:text-stone-300 text-xs font-semibold flex items-center gap-1.5 border border-stone-200 dark:border-stone-700 transition-all shadow-xs"
+          className="absolute top-4 right-4 p-2 rounded-xl bg-white dark:bg-stone-800 hover:bg-stone-100 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 text-xs font-semibold flex items-center gap-1.5 border border-stone-200 dark:border-stone-700 transition-all shadow-xs"
         >
           <Edit3 className="w-3.5 h-3.5 text-emerald-600" />
           <span>{isEditing ? 'Close' : 'Edit Profile'}</span>
@@ -104,7 +104,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               {selectedTargetMeta.number}. {selectedTargetMeta.englishName} ({selectedTargetMeta.name})
             </p>
           </div>
-          <div className="p-2.5 rounded-2xl bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-800">
+          <div className="p-2.5 rounded-2xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-800">
             <span className="text-[10px] font-bold uppercase text-stone-500 flex items-center gap-1">
               <BookOpen className="w-3 h-3 text-emerald-600" /> Daily Quota
             </span>
@@ -258,7 +258,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
                   isSelected
                     ? 'bg-emerald-600/10 border-emerald-600/40 text-stone-900 dark:text-stone-100 shadow-xs'
-                    : 'bg-white dark:bg-stone-850 border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300 hover:border-emerald-500/30'
+                    : 'bg-white dark:bg-stone-800 border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300 hover:border-emerald-500/30'
                 }`}
               >
                 <div>

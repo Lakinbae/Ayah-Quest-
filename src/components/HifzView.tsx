@@ -380,7 +380,7 @@ export const HifzView: React.FC<HifzViewProps> = ({
               className={`flex-1 py-1.5 rounded-xl text-xs font-extrabold transition-all ${
                 targetReps === reps
                   ? 'bg-emerald-700 text-white shadow-xs scale-102'
-                  : 'bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-750 hover:bg-stone-100'
+                  : 'bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700 hover:bg-stone-100'
               }`}
             >
               {reps === 999 ? '∞' : `${reps}x`}
@@ -425,7 +425,7 @@ export const HifzView: React.FC<HifzViewProps> = ({
               </p>
             </div>
           ) : (
-            <div className="my-4 py-6 px-6 bg-stone-100 dark:bg-stone-850 rounded-2xl border border-dashed border-stone-300 dark:border-stone-700 w-full text-center space-y-2">
+            <div className="my-4 py-6 px-6 bg-stone-100 dark:bg-stone-800 rounded-2xl border border-dashed border-stone-300 dark:border-stone-700 w-full text-center space-y-2">
               <p className="text-sm font-bold text-stone-700 dark:text-stone-300">
                 Verse masked for active mental recall
               </p>

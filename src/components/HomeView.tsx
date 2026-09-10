@@ -188,7 +188,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <button
             id="home-btn-start-revision"
             onClick={() => onNavigate('quran')}
-            className="py-3 px-4 rounded-2xl bg-white dark:bg-stone-800 hover:bg-stone-100 dark:hover:bg-stone-750 text-stone-800 dark:text-stone-200 font-bold text-xs sm:text-sm border border-stone-200 dark:border-stone-700 transition-all flex items-center gap-1.5"
+            className="py-3 px-4 rounded-2xl bg-white dark:bg-stone-800 hover:bg-stone-100 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-bold text-xs sm:text-sm border border-stone-200 dark:border-stone-700 transition-all flex items-center gap-1.5"
           >
             <BookOpen className="w-4 h-4 text-emerald-600" />
             <span>Browse 114 Surahs</span>
@@ -213,7 +213,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
 
         {weakRecords.length === 0 && hesitantRecords.length === 0 ? (
-          <div className="p-4 rounded-2xl bg-white dark:bg-stone-850 text-center space-y-2 border border-stone-200/90 dark:border-stone-800">
+          <div className="p-4 rounded-2xl bg-white dark:bg-stone-800 text-center space-y-2 border border-stone-200/90 dark:border-stone-800">
             <p className="text-xs font-semibold text-stone-800 dark:text-stone-200">
               ✨ Al-Hamdulillah! No weak verses flagged in your queue.
             </p>
