@@ -166,7 +166,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 type="text"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
-             {/*   placeholder="e.g. Bilal"*/}
+                placeholder="e.g. Bilal"
                 className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-none focus:border-emerald-600"
                 required
               />
@@ -177,7 +177,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 type="text"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
-               {/* placeholder="e.g. Mohammed"*/}
+               placeholder="e.g. Mohammed"
                 className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-none focus:border-emerald-600"
               />
             </div>
