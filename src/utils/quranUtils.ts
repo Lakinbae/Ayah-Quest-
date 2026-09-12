@@ -12,7 +12,7 @@ export function toArabicDigits(num: number): string {
  * Strips leading Bismillah from an ayah text if it's verse 1 of any surah other than Al-Fatihah (Surah 1).
  * AlQuran Cloud API embeds 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ' at the start of verse 1 for all surahs.
  */
-export function cleanAyahText(text: string, surahNumber: number, ayahNumber: number): string {
+export function cleanAyahText(text: string, surahNumber: number = 0, ayahNumber: number = 0): string {
   if (!text) return '';
 
   // In Surah 1 (Al-Fatihah), Bismillah is actually verse 1, so keep it!

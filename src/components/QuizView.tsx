@@ -1,26 +1,75 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   HelpCircle, Check, X, RotateCcw, Award, Sparkles, 
-  ArrowRight, Shuffle, Eye, Volume2, CheckCircle2, ChevronRight 
+  ArrowRight, Shuffle, Eye, Volume2, CheckCircle2, ChevronRight, 
+  Swords, Flame, BookOpen, Search, Layers, SlidersHorizontal, Loader2 
 } from 'lucide-react';
 import { SURAHS_DATA } from '../data/quranData';
 import { SURAH_LIST } from '../data/surahList';
+import { fetchSurah } from '../data/quranApi';
+import { FriendDuelView } from './FriendDuelView';
+import { UserProfile, Surah } from '../types';
+import { 
+  SoloQuizMode, 
+  SoloQuestion, 
+  generateQuestionsForSurah, 
+  generateMixedQuranQuestions 
+} from '../utils/soloRecallGenerator';
 
-type QuizMode = 'fill_blank' | 'next_ayah' | 'identify_surah' | 'word_order';
-
-interface Question {
-  type: QuizMode;
-  prompt: string;
-  arabicSnippet?: string;
-  translation?: string;
-  options: string[];
-  correctAnswer: string;
-  explanation?: string;
-  words?: string[]; // for word_order
+interface QuizViewProps {
+  user?: UserProfile;
+  initialArenaTab?: 'solo' | 'duel';
 }
 
-export const QuizView: React.FC = () => {
-  const [activeMode, setActiveMode] = useState<QuizMode>('fill_blank');
+const LENGTH_OPTIONS = [5, 10, 15, 20];
+
+const POPULAR_SURAHS = [
+  { number: 0, name: 'All 114 Surahs (Mixed)', ar: 'جميع السور' },
+  { number: 1, name: 'Al-Fatihah (1)', ar: 'الفاتحة' },
+  { number: 36, name: 'Ya-Sin (36)', ar: 'يس' },
+  { number: 55, name: 'Ar-Rahman (55)', ar: 'الرحمن' },
+  { number: 67, name: 'Al-Mulk (67)', ar: 'الملك' },
+  { number: 18, name: 'Al-Kahf (18)', ar: 'الكهف' },
+  { number: 112, name: 'Al-Ikhlas (112)', ar: 'الإخلاص' },
+];
+
+export const QuizView: React.FC<QuizViewProps> = ({
+  user = {
+    id: 'guest',
+    telegram_id: 0,
+    first_name: 'Seeker',
+    username: 'hafiz_seeker',
+    current_streak: 1,
+    best_streak: 1,
+    today_reviewed: 0,
+    daily_goal: 5,
+    target_surah: 1,
+    preferred_reciter: 'ar.alafasy',
+    font_size: 28,
+    theme: 'dark',
+  },
+  initialArenaTab = 'duel',
+}) => {
+  const [arenaTab, setArenaTab] = useState<'solo' | 'duel'>(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      if (p.get('duel') || p.get('challenge') || p.get('room')) return 'duel';
+    } catch {}
+    return initialArenaTab;
+  });
+
+  const [activeMode, setActiveMode] = useState<SoloQuizMode>('fill_blank');
+  const [selectedSurahNumber, setSelectedSurahNumber] = useState<number>(() => {
+    // Default to user target Surah or Surah Al-Mulk (67)
+    return user.target_surah || 67;
+  });
+  const [questionCount, setQuestionCount] = useState<number>(5);
+  const [isSurahPickerOpen, setIsSurahPickerOpen] = useState<boolean>(false);
+  const [surahSearchQuery, setSurahSearchQuery] = useState<string>('');
+  const [isLoadingSurah, setIsLoadingSurah] = useState<boolean>(false);
+
+  // Active quiz state
+  const [questions, setQuestions] = useState<SoloQuestion[]>([]);
   const [currentQIndex, setCurrentQIndex] = useState<number>(0);
   const [score, setScore] = useState<number>(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
@@ -31,228 +80,109 @@ export const QuizView: React.FC = () => {
   const [constructedWords, setConstructedWords] = useState<string[]>([]);
   const [availableWords, setAvailableWords] = useState<string[]>([]);
 
-  // 1. Fill In The Blank Questions
-  const fillInBlankQuestions: Question[] = [
-    {
-      type: 'fill_blank',
-      prompt: 'Identify the missing word in this verse from Surah Al-Mulk (67:1):',
-      arabicSnippet: 'تَبَارَكَ الَّذِي بِيَدِهِ ________ وَهُوَ عَلَىٰ كُلِّ شَيْءٍ قَدِيرٌ',
-      translation: 'Blessed is He in whose hand is the dominion, and He is over all things competent.',
-      correctAnswer: 'الْمُلْكُ',
-      options: ['الْمُلْكُ', 'الْحَمْدُ', 'الْخَلْقُ', 'الْعَرْشُ'],
-      explanation: 'Ayah 1 of Al-Mulk begins with: تَبَارَكَ الَّذِي بِيَدِهِ الْمُلْكُ',
-    },
-    {
-      type: 'fill_blank',
-      prompt: 'Complete the verse from Surah Al-Fatihah (1:5):',
-      arabicSnippet: 'إِيَّاكَ نَعْبُدُ وَإِيَّاكَ ________',
-      translation: 'It is You we worship and You we ask for help.',
-      correctAnswer: 'نَسْتَعِينُ',
-      options: ['نَسْتَعِينُ', 'نَرْجُو', 'نَسْتَغْفِرُ', 'نَخْشَىٰ'],
-      explanation: 'The famous verse 5 of Al-Fatihah is: إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ',
-    },
-    {
-      type: 'fill_blank',
-      prompt: 'Complete the verse from Surah Al-Mulk (67:2):',
-      arabicSnippet: 'الَّذِي خَلَقَ الْمَوْتَ وَالْحَيَاةَ لِيَبْلُوَكُمْ أَيُّكُمْ ________ عَمَلًا',
-      translation: '[He] who created death and life to test you as to which of you is best in deed.',
-      correctAnswer: 'أَحْسَنُ',
-      options: ['أَكْثَرُ', 'أَحْسَنُ', 'أَعْظَمُ', 'أَصْدَقُ'],
-      explanation: 'Ayah 2 emphasizes which of you is "أَحْسَنُ عَمَلًا" (best in deeds).',
-    },
-    {
-      type: 'fill_blank',
-      prompt: 'Complete the final verse of Surah Al-Ikhlas (112:4):',
-      arabicSnippet: 'وَلَمْ يَكُن لَّهُ ________ أَحَدٌ',
-      translation: 'Nor is there to Him any equivalent.',
-      correctAnswer: 'كُفُوًا',
-      options: ['شَبِيهًا', 'كُفُوًا', 'مِثْلًا', 'نِدًّا'],
-      explanation: 'Surah Al-Ikhlas 4: وَلَمْ يَكُن لَّهُ كُفُوًا أَحَدٌ',
-    },
-    {
-      type: 'fill_blank',
-      prompt: 'Fill in the missing word from Surah Al-Mulk (67:4):',
-      arabicSnippet: 'ثُمَّ ارْجِعِ الْبَصَرَ كَرَّتَيْنِ يَنقَلِبْ إِلَيْكَ الْبَصَرُ خَاسِئًا وَهُوَ ________',
-      translation: 'Then return [your] vision twice again. [Your] vision will return to you humbled while it is fatigued.',
-      correctAnswer: 'حَسِيرٌ',
-      options: ['بَصِيرٌ', 'حَسِيرٌ', 'كَسِيرٌ', 'نَذِيرٌ'],
-      explanation: 'Ayah 4 ends with: خَاسِئًا وَهُوَ حَسِيرٌ',
-    },
-  ];
+  // Filter 114 Surahs by search query
+  const filteredSurahs = useMemo(() => {
+    const q = surahSearchQuery.trim().toLowerCase();
+    if (!q) return SURAH_LIST;
+    return SURAH_LIST.filter(
+      (s) =>
+        s.number.toString() === q ||
+        s.englishName.toLowerCase().includes(q) ||
+        s.name.includes(q) ||
+        s.englishNameTranslation.toLowerCase().includes(q)
+    );
+  }, [surahSearchQuery]);
 
-  // 2. Next Ayah Questions
-  const nextAyahQuestions: Question[] = [
-    {
-      type: 'next_ayah',
-      prompt: 'Which Ayah comes immediately NEXT after this verse?',
-      arabicSnippet: 'اهْدِنَا الصِّرَاطَ الْمُسْتَقِيمَ (الفاتحة: 6)',
-      translation: 'Guide us to the straight path.',
-      correctAnswer: 'صِرَاطَ الَّذِينَ أَنْعَمْتَ عَلَيْهِمْ غَيْرِ الْمَغْضُوبِ عَلَيْهِمْ وَلَا الضَّالِّينَ',
-      options: [
-        'صِرَاطَ الَّذِينَ أَنْعَمْتَ عَلَيْهِمْ غَيْرِ الْمَغْضُوبِ عَلَيْهِمْ وَلَا الضَّالِّينَ',
-        'الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ',
-        'مَالِكِ يَوْمِ الدِّينِ',
-        'إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ',
-      ],
-      explanation: 'Ayah 7 is the final ayah of Al-Fatihah, following ayah 6.',
-    },
-    {
-      type: 'next_ayah',
-      prompt: 'What is the NEXT verse after:',
-      arabicSnippet: 'تَبَارَكَ الَّذِي بِيَدِهِ الْمُلْكُ وَهُوَ عَلَىٰ كُلِّ شَيْءٍ قَدِيرٌ (الملك: 1)',
-      translation: 'Blessed is He in whose hand is the dominion...',
-      correctAnswer: 'الَّذِي خَلَقَ الْمَوْتَ وَالْحَيَاةَ لِيَبْلُوَكُمْ أَيُّكُمْ أَحْسَنُ عَمَلًا',
-      options: [
-        'الَّذِي خَلَقَ الْمَوْتَ وَالْحَيَاةَ لِيَبْلُوَكُمْ أَيُّكُمْ أَحْسَنُ عَمَلًا',
-        'الَّذِي خَلَقَ سَبْعَ سَمَاوَاتٍ طِبَاقًا',
-        'وَلَقَدْ زَيَّنَّا السَّمَاءَ الدُّنْيَا بِمَصَابِيحَ',
-        'إِنَّ الَّذِينَ يَخْشَوْنَ رَبَّهُم بِالْغَيْبِ',
-      ],
-      explanation: 'Ayah 2 of Surah Al-Mulk begins with: الَّذِي خَلَقَ الْمَوْتَ وَالْحَيَاةَ',
-    },
-    {
-      type: 'next_ayah',
-      prompt: 'Which verse comes immediately AFTER:',
-      arabicSnippet: 'قُلْ أَعُوذُ بِرَبِّ الْفَلَقِ (الفلق: 1)',
-      translation: 'Say, "I seek refuge in the Lord of daybreak..."',
-      correctAnswer: 'مِن شَرِّ مَا خَلَقَ',
-      options: [
-        'مِن شَرِّ مَا خَلَقَ',
-        'وَمِن شَرِّ غَاسِقٍ إِذَا وَقَبَ',
-        'وَمِن شَرِّ النَّفَّاثَاتِ فِي الْعُقَدِ',
-        'مَلِكِ النَّاسِ',
-      ],
-      explanation: 'Ayah 2 of Surah Al-Falaq is: مِن شَرِّ مَا خَلَقَ',
-    },
-    {
-      type: 'next_ayah',
-      prompt: 'What follows:',
-      arabicSnippet: 'قُلْ أَعُوذُ بِرَبِّ النَّاسِ (الناس: 1)',
-      translation: 'Say, "I seek refuge in the Lord of mankind..."',
-      correctAnswer: 'مَلِكِ النَّاسِ',
-      options: [
-        'مَلِكِ النَّاسِ',
-        'إِلَٰهِ النَّاسِ',
-        'مِن شَرِّ الْوَسْوَاسِ الْخَنَّاسِ',
-        'مِن شَرِّ مَا خَلَقَ',
-      ],
-      explanation: 'Ayah 2 of Surah An-Nas is: مَلِكِ النَّاسِ',
-    },
-  ];
+  // Selected Surah Metadata
+  const selectedSurahMeta = useMemo(() => {
+    if (selectedSurahNumber === 0) {
+      return {
+        number: 0,
+        englishName: 'All 114 Surahs (Mixed)',
+        name: 'كتاب الله الكريم',
+        numberOfAyahs: 6236,
+      };
+    }
+    return (
+      SURAH_LIST.find((s) => s.number === selectedSurahNumber) || {
+        number: selectedSurahNumber,
+        englishName: `Surah ${selectedSurahNumber}`,
+        name: `سورة ${selectedSurahNumber}`,
+        numberOfAyahs: 0,
+      }
+    );
+  }, [selectedSurahNumber]);
 
-  // 3. Identify Surah Questions
-  const identifySurahQuestions: Question[] = [
-    {
-      type: 'identify_surah',
-      prompt: 'Which Surah contains this noble verse?',
-      arabicSnippet: 'الَّذِي خَلَقَ سَبْعَ سَمَاوَاتٍ طِبَاقًا مَّا تَرَىٰ فِي خَلْقِ الرَّحْمَٰنِ مِن تَفَاوُتٍ',
-      translation: '[And] who created seven heavens in layers. You see not in the creation of the Most Merciful any inconsistency.',
-      correctAnswer: 'Al-Mulk (67)',
-      options: ['Al-Mulk (67)', 'Ya-Sin (36)', 'Al-Kahf (18)', 'Ar-Rahman (55)'],
-      explanation: 'This is Ayah 3 of Surah Al-Mulk.',
-    },
-    {
-      type: 'identify_surah',
-      prompt: 'Which Surah contains this verse?',
-      arabicSnippet: 'إِنَّا أَعْطَيْنَاكَ الْكَوْثَرَ',
-      translation: 'Indeed, We have granted you, [O Muhammad], al-Kawthar.',
-      correctAnswer: 'Al-Kawthar (108)',
-      options: ['Al-Kawthar (108)', 'Al-Ikhlas (112)', 'An-Nasr (110)', 'Al-Fil (105)'],
-      explanation: 'Ayah 1 of Surah 108: Al-Kawthar.',
-    },
-    {
-      type: 'identify_surah',
-      prompt: 'Which Surah is this verse from?',
-      arabicSnippet: 'قُلْ هُوَ الرَّحْمَٰنُ آمَنَّا بِهِ وَعَلَيْهِ تَوَكَّلْنَا',
-      translation: 'Say, "He is the Most Merciful; we have believed in Him, and upon Him we have relied."',
-      correctAnswer: 'Al-Mulk (67)',
-      options: ['Al-Mulk (67)', 'Al-Baqarah (2)', 'Al-Imran (3)', 'An-Nisa (4)'],
-      explanation: 'Ayah 29 of Surah Al-Mulk.',
-    },
-    {
-      type: 'identify_surah',
-      prompt: 'Which Surah opens with:',
-      arabicSnippet: 'الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ',
-      translation: '[All] praise is [due] to Allah, Lord of the worlds.',
-      correctAnswer: 'Al-Fatihah (1)',
-      options: ['Al-Fatihah (1)', 'Al-Baqarah (2)', 'Al-Anam (6)', 'Al-Kahf (18)'],
-      explanation: 'Al-Fatihah ("The Opening") begins with this foundational declaration.',
-    },
-  ];
+  // Load questions whenever Surah, Mode, or Length changes
+  const loadQuestions = async (surahNum: number, mode: SoloQuizMode, count: number) => {
+    setIsLoadingSurah(true);
+    setCurrentQIndex(0);
+    setScore(0);
+    setSelectedAnswer(null);
+    setIsAnswered(false);
+    setIsFinished(false);
+    setConstructedWords([]);
+    setAvailableWords([]);
 
-  // 4. Word Order Scramble Questions
-  const wordOrderQuestions: Question[] = [
-    {
-      type: 'word_order',
-      prompt: 'Tap the words in the exact sequence to assemble this verse:',
-      arabicSnippet: 'Surah Al-Ikhlas (112:1)',
-      translation: 'Say, "He is Allah, [who is] One"',
-      correctAnswer: 'قُلْ هُوَ اللَّهُ أَحَدٌ',
-      options: [],
-      words: ['اللَّهُ', 'قُلْ', 'أَحَدٌ', 'هُوَ'],
-      explanation: 'Correct order: قُلْ هُوَ اللَّهُ أَحَدٌ',
-    },
-    {
-      type: 'word_order',
-      prompt: 'Reconstruct the holy verse by tapping the words in correct order:',
-      arabicSnippet: 'Surah Al-Fatihah (1:2)',
-      translation: '[All] praise is [due] to Allah, Lord of the worlds',
-      correctAnswer: 'الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ',
-      options: [],
-      words: ['الْعَالَمِينَ', 'الْحَمْدُ', 'رَبِّ', 'لِلَّهِ'],
-      explanation: 'Correct order: الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ',
-    },
-    {
-      type: 'word_order',
-      prompt: 'Assemble the verse in order:',
-      arabicSnippet: 'Surah Al-Mulk (67:14)',
-      translation: 'Does He who created not know, while He is the Subtle, the Acquainted?',
-      correctAnswer: 'أَلَا يَعْلَمُ مَنْ خَلَقَ وَهُوَ اللَّطِيفُ الْخَبِيرُ',
-      options: [],
-      words: ['اللَّطِيفُ', 'أَلَا', 'الْخَبِيرُ', 'يَعْلَمُ', 'وَهُوَ', 'مَنْ', 'خَلَقَ'],
-      explanation: 'Correct order: أَلَا يَعْلَمُ مَنْ خَلَقَ وَهُوَ اللَّطِيفُ الْخَبِيرُ',
-    },
-  ];
-
-  // Select questions according to active mode
-  const getQuestionsForMode = (): Question[] => {
-    switch (activeMode) {
-      case 'fill_blank':
-        return fillInBlankQuestions;
-      case 'next_ayah':
-        return nextAyahQuestions;
-      case 'identify_surah':
-        return identifySurahQuestions;
-      case 'word_order':
-        return wordOrderQuestions;
+    try {
+      if (surahNum === 0) {
+        // Mixed Challenge across All Surahs
+        const mixed = generateMixedQuranQuestions(mode, count, SURAHS_DATA);
+        setQuestions(mixed);
+      } else {
+        // Fetch specific Surah data (cached or online via AlQuran API)
+        const surahData: Surah = await fetchSurah(surahNum);
+        const generated = generateQuestionsForSurah(surahData, mode, count);
+        
+        // If not enough questions in requested mode, fallback to mixed
+        if (generated.length === 0) {
+          const fallback = generateMixedQuranQuestions(mode, count, {
+            ...SURAHS_DATA,
+            [surahNum]: surahData,
+          });
+          setQuestions(fallback);
+        } else {
+          setQuestions(generated);
+        }
+      }
+    } catch (err) {
+      console.error('Error generating solo recall questions:', err);
+      // Fallback to mixed questions from preloaded data
+      const fallback = generateMixedQuranQuestions(mode, count, SURAHS_DATA);
+      setQuestions(fallback);
+    } finally {
+      setIsLoadingSurah(false);
     }
   };
 
-  const currentQuestions = getQuestionsForMode();
-  const q = currentQuestions[currentQIndex] || currentQuestions[0];
+  // Initial load
+  useEffect(() => {
+    loadQuestions(selectedSurahNumber, activeMode, questionCount);
+  }, [selectedSurahNumber, activeMode, questionCount]);
+
+  const currentQ = questions[currentQIndex] || questions[0];
 
   // Initialize word scramble when entering a word_order question
-  React.useEffect(() => {
-    if (q.type === 'word_order' && q.words) {
-      // Shuffle words copy
-      const shuffled = [...q.words].sort(() => Math.random() - 0.5);
+  useEffect(() => {
+    if (currentQ?.type === 'word_order' && currentQ.words) {
+      const shuffled = [...currentQ.words].sort(() => Math.random() - 0.5);
       setAvailableWords(shuffled);
       setConstructedWords([]);
     }
-  }, [currentQIndex, activeMode]);
+  }, [currentQIndex, currentQ]);
 
   const handleSelectOption = (opt: string) => {
-    if (isAnswered) return;
+    if (isAnswered || !currentQ) return;
     setSelectedAnswer(opt);
     setIsAnswered(true);
 
-    if (opt === q.correctAnswer) {
+    if (opt === currentQ.correctAnswer) {
       setScore((prev) => prev + 1);
     }
   };
 
   const handleWordTap = (word: string, index: number) => {
-    if (isAnswered) return;
+    if (isAnswered || !currentQ) return;
     const newConstructed = [...constructedWords, word];
     const newAvailable = availableWords.filter((_, i) => i !== index);
     setConstructedWords(newConstructed);
@@ -263,7 +193,7 @@ export const QuizView: React.FC = () => {
       const finalSentence = newConstructed.join(' ');
       setSelectedAnswer(finalSentence);
       setIsAnswered(true);
-      if (finalSentence === q.correctAnswer) {
+      if (finalSentence === currentQ.correctAnswer) {
         setScore((prev) => prev + 1);
       }
     }
@@ -277,7 +207,7 @@ export const QuizView: React.FC = () => {
   };
 
   const handleNext = () => {
-    if (currentQIndex < currentQuestions.length - 1) {
+    if (currentQIndex < questions.length - 1) {
       setCurrentQIndex((prev) => prev + 1);
       setSelectedAnswer(null);
       setIsAnswered(false);
@@ -287,281 +217,499 @@ export const QuizView: React.FC = () => {
     }
   };
 
-  const handleSwitchMode = (mode: QuizMode) => {
-    setActiveMode(mode);
-    setCurrentQIndex(0);
-    setScore(0);
-    setSelectedAnswer(null);
-    setIsAnswered(false);
-    setIsFinished(false);
-    setConstructedWords([]);
-  };
-
   const handleRestart = () => {
-    setCurrentQIndex(0);
-    setScore(0);
-    setSelectedAnswer(null);
-    setIsAnswered(false);
-    setIsFinished(false);
-    setConstructedWords([]);
+    loadQuestions(selectedSurahNumber, activeMode, questionCount);
   };
 
   return (
     <div className="space-y-4">
-      {/* Quiz Modes Selector */}
-      <div className="bg-white dark:bg-stone-900 p-3 rounded-3xl border border-stone-200 dark:border-stone-800 shadow-sm space-y-2">
-        <div className="flex items-center justify-between px-1">
-          <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
-            Quran Recall & Quiz Arena
-          </span>
-          <span className="text-[11px] font-semibold text-stone-500">
-            {score} Correct
-          </span>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5 text-xs">
-          <button
-            onClick={() => handleSwitchMode('fill_blank')}
-            className={`py-2 px-2.5 rounded-xl font-bold transition-all text-center ${
-              activeMode === 'fill_blank'
-                ? 'bg-emerald-700 text-white shadow-sm'
-                : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200'
-            }`}
-          >
-            Fill in Blank
-          </button>
-          <button
-            onClick={() => handleSwitchMode('next_ayah')}
-            className={`py-2 px-2.5 rounded-xl font-bold transition-all text-center ${
-              activeMode === 'next_ayah'
-                ? 'bg-emerald-700 text-white shadow-sm'
-                : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200'
-            }`}
-          >
-            Next Ayah
-          </button>
-          <button
-            onClick={() => handleSwitchMode('identify_surah')}
-            className={`py-2 px-2.5 rounded-xl font-bold transition-all text-center ${
-              activeMode === 'identify_surah'
-                ? 'bg-emerald-700 text-white shadow-sm'
-                : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200'
-            }`}
-          >
-            Identify Surah
-          </button>
-          <button
-            onClick={() => handleSwitchMode('word_order')}
-            className={`py-2 px-2.5 rounded-xl font-bold transition-all text-center ${
-              activeMode === 'word_order'
-                ? 'bg-emerald-700 text-white shadow-sm'
-                : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200'
-            }`}
-          >
-            Word Scramble
-          </button>
-        </div>
+      {/* Top Arena Navigation Toggle: Duel / Challenges vs Solo Practice */}
+      <div className="flex bg-stone-200/80 dark:bg-stone-800/80 p-1 rounded-2xl">
+        <button
+          onClick={() => setArenaTab('duel')}
+          className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+            arenaTab === 'duel'
+              ? 'bg-emerald-700 text-white shadow-xs'
+              : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
+          }`}
+        >
+          <Swords className="w-3.5 h-3.5" />
+          <span>Friend Duels & Challenges</span>
+        </button>
+        <button
+          onClick={() => setArenaTab('solo')}
+          className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+            arenaTab === 'solo'
+              ? 'bg-emerald-700 text-white shadow-xs'
+              : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
+          }`}
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          <span>Solo Recall Practice</span>
+        </button>
       </div>
 
-      {/* Main Question Card or Final Result */}
-      {!isFinished ? (
-        <div className="bg-[#faf8f5] dark:bg-stone-900 p-5 rounded-3xl border border-stone-200/90 dark:border-stone-800 shadow-xs space-y-4">
-          <div className="flex items-center justify-between text-xs text-stone-500 dark:text-stone-400">
-            <span className="font-bold text-stone-700 dark:text-stone-300">
-              Question {currentQIndex + 1} of {currentQuestions.length}
-            </span>
-            <span className="px-2.5 py-0.5 rounded-full bg-emerald-600/10 text-emerald-800 dark:text-emerald-300 font-bold text-[11px] border border-emerald-600/20">
-              {activeMode === 'fill_blank' && 'Missing Word'}
-              {activeMode === 'next_ayah' && 'Sequence Recall'}
-              {activeMode === 'identify_surah' && 'Surah Identification'}
-              {activeMode === 'word_order' && 'Word Arrangement'}
-            </span>
+      {arenaTab === 'duel' ? (
+        <FriendDuelView user={user} onBackToSolo={() => setArenaTab('solo')} />
+      ) : (
+        <div className="space-y-4 animate-in fade-in">
+          {/* Solo Recall Customization Header: Surah Choice & Length Options */}
+          <div className="bg-[#faf8f5] dark:bg-stone-900 p-4 sm:p-5 rounded-3xl border border-stone-200/90 dark:border-stone-800 shadow-sm space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-1 border-b border-stone-200/80 dark:border-stone-800">
+              <div>
+                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">
+                  Solo Quran Recall
+                </span>
+                <h2 className="text-base sm:text-lg font-black text-stone-900 dark:text-stone-100">
+                  Custom Practice Session
+                </h2>
+              </div>
+
+              {/* Surah Picker Trigger Button */}
+              <button
+                onClick={() => setIsSurahPickerOpen(true)}
+                className="px-3 py-1.5 rounded-xl bg-white dark:bg-stone-800 border border-stone-300/80 dark:border-stone-700 text-stone-800 dark:text-stone-200 hover:border-emerald-600 flex items-center gap-2 text-xs font-bold shadow-xs transition-all"
+              >
+                <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
+                <span>
+                  {selectedSurahNumber === 0
+                    ? 'All 114 Surahs'
+                    : `${selectedSurahMeta.englishName} (${selectedSurahNumber})`}
+                </span>
+                <SlidersHorizontal className="w-3 h-3 text-stone-400 ml-1" />
+              </button>
+            </div>
+
+            {/* Quick Popular Surahs Pills */}
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 dark:text-stone-500 block">
+                Quick Surah Select:
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {POPULAR_SURAHS.map((s) => {
+                  const isSelected = selectedSurahNumber === s.number;
+                  return (
+                    <button
+                      key={s.number}
+                      onClick={() => setSelectedSurahNumber(s.number)}
+                      className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all ${
+                        isSelected
+                          ? 'bg-emerald-700 text-white shadow-xs'
+                          : 'bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:border-stone-400'
+                      }`}
+                    >
+                      <span>{s.name}</span>
+                    </button>
+                  );
+                })}
+                <button
+                  onClick={() => setIsSurahPickerOpen(true)}
+                  className="px-2.5 py-1 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all flex items-center gap-1"
+                >
+                  <Search className="w-3 h-3" />
+                  <span>Choose from all 114...</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Challenge Length Options */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-stone-200/80 dark:border-stone-800">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold text-stone-600 dark:text-stone-300">
+                  Challenge Length:
+                </span>
+                <div className="flex gap-1">
+                  {LENGTH_OPTIONS.map((len) => (
+                    <button
+                      key={len}
+                      onClick={() => setQuestionCount(len)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                        questionCount === len
+                          ? 'bg-emerald-700 text-white shadow-xs'
+                          : 'bg-stone-200/80 dark:bg-stone-800 text-stone-600 dark:text-stone-400 hover:bg-stone-300'
+                      }`}
+                    >
+                      {len} Ayahs
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="text-right">
+                <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                  {score} / {questions.length} Correct
+                </span>
+              </div>
+            </div>
+
+            {/* Quiz Recall Modes Selector */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1 text-xs">
+              <button
+                onClick={() => setActiveMode('fill_blank')}
+                className={`py-2 px-2.5 rounded-xl font-bold transition-all text-center ${
+                  activeMode === 'fill_blank'
+                    ? 'bg-emerald-700 text-white shadow-sm'
+                    : 'bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700 hover:bg-stone-100'
+                }`}
+              >
+                Missing Word
+              </button>
+              <button
+                onClick={() => setActiveMode('next_ayah')}
+                className={`py-2 px-2.5 rounded-xl font-bold transition-all text-center ${
+                  activeMode === 'next_ayah'
+                    ? 'bg-emerald-700 text-white shadow-sm'
+                    : 'bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700 hover:bg-stone-100'
+                }`}
+              >
+                Next Ayah
+              </button>
+              <button
+                onClick={() => setActiveMode('identify_surah')}
+                className={`py-2 px-2.5 rounded-xl font-bold transition-all text-center ${
+                  activeMode === 'identify_surah'
+                    ? 'bg-emerald-700 text-white shadow-sm'
+                    : 'bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700 hover:bg-stone-100'
+                }`}
+              >
+                Identify Surah
+              </button>
+              <button
+                onClick={() => setActiveMode('word_order')}
+                className={`py-2 px-2.5 rounded-xl font-bold transition-all text-center ${
+                  activeMode === 'word_order'
+                    ? 'bg-emerald-700 text-white shadow-sm'
+                    : 'bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700 hover:bg-stone-100'
+                }`}
+              >
+                Word Arrangement
+              </button>
+            </div>
           </div>
 
-          <p className="text-xs font-bold text-stone-800 dark:text-stone-200 leading-relaxed">
-            {q.prompt}
-          </p>
-
-          {/* Prompt Verse Snippet */}
-          {q.arabicSnippet && (
-            <div className="p-5 bg-emerald-50/50 dark:bg-stone-800 rounded-2xl border border-emerald-500/20 dark:border-stone-700 text-center shadow-xs">
-              <p className="font-quran text-2xl md:text-3xl text-stone-900 dark:text-emerald-200 leading-loose select-none" dir="rtl">
-                {q.arabicSnippet.includes('________') ? (
-                  <>
-                    {q.arabicSnippet.split('________').map((part, pIdx, arr) => (
-                      <React.Fragment key={pIdx}>
-                        <span>{part}</span>
-                        {pIdx < arr.length - 1 && (
-                          <span className="inline-flex items-center justify-center px-3 py-0.5 mx-1.5 rounded-lg border-2 border-dashed border-emerald-500/80 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-sans text-xs font-bold align-middle tracking-wider select-none">
-                            [ ؟ ]
-                          </span>
-                        )}
-                      </React.Fragment>
-                    ))}
-                  </>
-                ) : (
-                  q.arabicSnippet
-                )}
+          {/* Loading Indicator */}
+          {isLoadingSurah && (
+            <div className="p-8 text-center bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 space-y-3">
+              <Loader2 className="w-8 h-8 mx-auto text-emerald-600 animate-spin" />
+              <p className="text-xs font-bold text-stone-600 dark:text-stone-300">
+                Loading verses for {selectedSurahMeta.englishName}...
               </p>
-              {q.translation && (
-                <p className="text-xs text-stone-600 dark:text-stone-300 mt-2 italic font-normal">
-                  "{q.translation}"
-                </p>
-              )}
             </div>
           )}
 
-          {/* Standard Multiple Choice (Fill in Blank, Next Ayah, Identify Surah) */}
-          {q.type !== 'word_order' ? (
-            <div className="space-y-2">
-              {q.options.map((option, idx) => {
-                const isThisSelected = selectedAnswer === option;
-                const isCorrect = option === q.correctAnswer;
+          {/* Main Question Card or Final Result */}
+          {!isLoadingSurah && !isFinished && currentQ && (
+            <div className="bg-[#faf8f5] dark:bg-stone-900 p-5 sm:p-6 rounded-3xl border border-stone-200/90 dark:border-stone-800 shadow-xs space-y-4">
+              <div className="flex items-center justify-between text-xs text-stone-500 dark:text-stone-400">
+                <span className="font-bold text-stone-700 dark:text-stone-300">
+                  Question {currentQIndex + 1} of {questions.length}
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-600/10 text-emerald-800 dark:text-emerald-300 font-bold text-[11px] border border-emerald-600/20">
+                  {currentQ.surahReference}
+                </span>
+              </div>
 
-                let btnStyle = 'border-stone-200 dark:border-stone-800 text-stone-800 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-800';
+              {/* English Question Prompt Box (Separated cleanly by container/enter) */}
+              <div className="p-3.5 bg-white dark:bg-stone-800/80 rounded-2xl border border-stone-200/90 dark:border-stone-700/80 space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 block">
+                  Question Prompt
+                </span>
+                <h3 className="text-sm md:text-base font-bold text-stone-900 dark:text-stone-100 leading-snug">
+                  {currentQ.prompt}
+                </h3>
+              </div>
 
-                if (isAnswered) {
-                  if (isCorrect) {
-                    btnStyle = 'bg-emerald-500/20 border-emerald-500 text-emerald-800 dark:text-emerald-300 font-bold';
-                  } else if (isThisSelected) {
-                    btnStyle = 'bg-rose-500/20 border-rose-500 text-rose-800 dark:text-rose-300 font-bold';
-                  } else {
-                    btnStyle = 'opacity-40 border-stone-200 dark:border-stone-800';
-                  }
-                }
-
-                return (
-                  <button
-                    key={idx}
-                    onClick={() => handleSelectOption(option)}
-                    disabled={isAnswered}
-                    className={`w-full p-3.5 rounded-2xl border text-left flex items-center justify-between transition-all text-xs font-medium ${btnStyle}`}
-                  >
-                    <span className="flex-1 font-quran text-base leading-normal" dir="rtl">
-                      {option}
-                    </span>
-                    {isAnswered && (
-                      <span className="ml-2 shrink-0">
-                        {isCorrect ? (
-                          <Check className="w-4 h-4 text-emerald-600" />
-                        ) : isThisSelected ? (
-                          <X className="w-4 h-4 text-rose-600" />
-                        ) : null}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            /* Word Order Scramble Mode UI */
-            <div className="space-y-4">
-              {/* Target Assembly Area */}
-              <div className="p-4 bg-stone-50 dark:bg-stone-800 rounded-2xl border-2 border-dashed border-stone-200 dark:border-stone-700 min-h-[70px] flex flex-wrap items-center justify-center gap-2" dir="rtl">
-                {constructedWords.length === 0 ? (
-                  <span className="text-xs text-stone-400">
-                    Tap the scrambled words below in the correct sequence...
+              {/* Prompt Holy Quran Verse Snippet */}
+              {currentQ.arabicSnippet && (
+                <div className="py-4 px-4 bg-emerald-50/60 dark:bg-stone-800/90 rounded-2xl border border-emerald-500/25 dark:border-stone-700 text-center shadow-xs space-y-2">
+                  <span className="text-[10px] uppercase font-bold tracking-widest text-emerald-800/60 dark:text-emerald-300/60 block">
+                    Noble Quranic Text (الآية الكريمة)
                   </span>
-                ) : (
-                  constructedWords.map((w, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => handleRemoveWord(w, idx)}
-                      disabled={isAnswered}
-                      className="px-3 py-1.5 rounded-xl bg-emerald-700 text-white font-quran text-base shadow-sm hover:bg-emerald-800 active:scale-95 transition-all"
-                    >
-                      {w}
-                    </button>
-                  ))
-                )}
-              </div>
-
-              {/* Scrambled Word Pool */}
-              <div className="flex flex-wrap items-center justify-center gap-2 pt-2" dir="rtl">
-                {availableWords.map((w, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleWordTap(w, idx)}
-                    disabled={isAnswered}
-                    className="px-3 py-2 rounded-xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-quran text-base shadow-xs hover:border-emerald-500 active:scale-95 transition-all"
-                  >
-                    {w}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Explanation & Next Question Button */}
-          {isAnswered && (
-            <div className="pt-2 space-y-3">
-              {q.explanation && (
-                <div className="p-3 rounded-2xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-800 text-xs text-stone-600 dark:text-stone-300">
-                  <span className="font-bold text-emerald-600">💡 Insight: </span>
-                  {q.explanation}
+                  <p className="font-quran text-2xl md:text-3xl text-emerald-950 dark:text-emerald-100 leading-loose select-none" dir="rtl">
+                    {currentQ.arabicSnippet.includes('________') ? (
+                      <>
+                        {currentQ.arabicSnippet.split('________').map((part, pIdx, arr) => (
+                          <React.Fragment key={pIdx}>
+                            <span>{part}</span>
+                            {pIdx < arr.length - 1 && (
+                              <span className="inline-flex items-center justify-center px-3 py-0.5 mx-1.5 rounded-lg border-2 border-dashed border-emerald-600 bg-emerald-500/15 text-emerald-800 dark:text-emerald-200 font-sans text-xs font-black align-middle tracking-wider select-none">
+                                [ ؟ ]
+                              </span>
+                            )}
+                          </React.Fragment>
+                        ))}
+                      </>
+                    ) : (
+                      currentQ.arabicSnippet
+                    )}
+                  </p>
+                  {currentQ.translation && (
+                    <div className="pt-2 border-t border-emerald-900/10 dark:border-emerald-500/20">
+                      <p className="text-xs text-stone-600 dark:text-stone-300 italic font-normal">
+                        "{currentQ.translation}"
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 
-              <button
-                onClick={handleNext}
-                className="w-full py-3 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all"
-              >
-                <span>{currentQIndex < currentQuestions.length - 1 ? 'Next Question' : 'Complete Quiz'}</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
+              {/* Standard Multiple Choice (Fill in Blank, Next Ayah, Identify Surah) */}
+              {currentQ.type !== 'word_order' ? (
+                <div className="space-y-2 pt-1">
+                  {currentQ.options.map((option, idx) => {
+                    const isThisSelected = selectedAnswer === option;
+                    const isCorrect = option === currentQ.correctAnswer;
+
+                    let btnStyle = 'bg-white dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-800 dark:text-stone-200 hover:border-emerald-600';
+
+                    if (isAnswered) {
+                      if (isCorrect) {
+                        btnStyle = 'bg-emerald-600 text-white border-emerald-600 shadow-xs';
+                      } else if (isThisSelected) {
+                        btnStyle = 'bg-rose-600 text-white border-rose-600';
+                      } else {
+                        btnStyle = 'opacity-40 bg-white dark:bg-stone-800 border-stone-200 dark:border-stone-700';
+                      }
+                    }
+
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => handleSelectOption(option)}
+                        disabled={isAnswered}
+                        className={`w-full p-3.5 rounded-2xl border text-left flex items-center justify-between transition-all text-xs font-medium ${btnStyle}`}
+                      >
+                        <span className="flex-1 font-quran text-base sm:text-lg leading-normal" dir="rtl">
+                          {option}
+                        </span>
+                        {isAnswered && (
+                          <span className="ml-2 shrink-0">
+                            {isCorrect ? (
+                              <CheckCircle2 className="w-5 h-5 text-white" />
+                            ) : isThisSelected ? (
+                              <X className="w-5 h-5 text-white" />
+                            ) : null}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                /* Word Order Scramble Mode UI */
+                <div className="space-y-4 pt-1">
+                  {/* Target Assembly Area */}
+                  <div className="p-4 bg-white dark:bg-stone-800 rounded-2xl border-2 border-dashed border-emerald-500/30 dark:border-emerald-500/20 min-h-[80px] flex flex-wrap items-center justify-center gap-2" dir="rtl">
+                    {constructedWords.length === 0 ? (
+                      <span className="text-xs text-stone-400">
+                        Tap the scrambled words below in the correct sequence...
+                      </span>
+                    ) : (
+                      constructedWords.map((w, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => handleRemoveWord(w, idx)}
+                          disabled={isAnswered}
+                          className="px-3 py-1.5 rounded-xl bg-emerald-700 text-white font-quran text-base shadow-sm hover:bg-emerald-800 active:scale-95 transition-all"
+                        >
+                          {w}
+                        </button>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Scrambled Word Pool */}
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-2" dir="rtl">
+                    {availableWords.map((w, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => handleWordTap(w, idx)}
+                        disabled={isAnswered}
+                        className="px-3.5 py-2 rounded-xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-quran text-base shadow-xs hover:border-emerald-500 active:scale-95 transition-all"
+                      >
+                        {w}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Explanation & Next Question Button */}
+              {isAnswered && (
+                <div className="pt-2 space-y-3 animate-in fade-in">
+                  {currentQ.explanation && (
+                    <div className="p-3.5 rounded-2xl bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-xs text-stone-700 dark:text-stone-300">
+                      <span className="font-bold text-emerald-700 dark:text-emerald-400">💡 Insight: </span>
+                      {currentQ.explanation}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleNext}
+                    className="w-full py-3 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all active:scale-98"
+                  >
+                    <span>
+                      {currentQIndex < questions.length - 1 ? 'Next Question' : 'Complete Quiz'}
+                    </span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
           )}
-        </div>
-      ) : (
-        /* Quiz Complete Screen */
-        <div className="bg-white dark:bg-stone-900 p-6 rounded-3xl border border-stone-200 dark:border-stone-800 shadow-sm text-center space-y-4">
-          <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto text-2xl">
-            🏆
-          </div>
 
-          <div>
-            <h3 className="text-lg font-extrabold text-stone-900 dark:text-stone-100">
-              Quiz Completed!
-            </h3>
-            <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
-              May Allah bless your dedication to the Noble Quran.
-            </p>
-          </div>
+          {/* Quiz Complete Screen */}
+          {!isLoadingSurah && isFinished && (
+            <div className="bg-[#faf8f5] dark:bg-stone-900 p-6 sm:p-8 rounded-3xl border border-stone-200/90 dark:border-stone-800 shadow-sm text-center space-y-4 animate-in fade-in">
+              <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto text-3xl">
+                🏆
+              </div>
 
-          <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-800 inline-block px-8">
-            <span className="text-xs uppercase font-bold text-stone-400 block">Your Score</span>
-            <span className="text-3xl font-black text-emerald-700 dark:text-emerald-400">
-              {score} / {currentQuestions.length}
-            </span>
-            <span className="text-xs font-semibold text-stone-500 block mt-1">
-              {Math.round((score / currentQuestions.length) * 100)}% Accuracy
-            </span>
-          </div>
+              <div>
+                <h3 className="text-xl font-black text-stone-900 dark:text-stone-100">
+                  Solo Practice Completed!
+                </h3>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
+                  Surah: {selectedSurahMeta.englishName} • {questionCount} Verses
+                </p>
+              </div>
 
-          <div className="flex gap-2 justify-center pt-2">
-            <button
-              onClick={handleRestart}
-              className="px-5 py-2.5 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center gap-2 shadow-sm transition-all"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Retry Mode</span>
-            </button>
-            <button
-              onClick={() => {
-                const nextModeMap: Record<QuizMode, QuizMode> = {
-                  fill_blank: 'next_ayah',
-                  next_ayah: 'identify_surah',
-                  identify_surah: 'word_order',
-                  word_order: 'fill_blank',
-                };
-                handleSwitchMode(nextModeMap[activeMode]);
-              }}
-              className="px-5 py-2.5 rounded-2xl bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-200 font-bold text-xs flex items-center gap-2 transition-all hover:bg-stone-200"
-            >
-              <span>Try Next Mode</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
+              <div className="p-4 rounded-2xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 inline-block px-8 shadow-xs">
+                <span className="text-xs uppercase font-bold text-stone-400 block">
+                  Your Score
+                </span>
+                <span className="text-3xl font-black text-emerald-700 dark:text-emerald-400">
+                  {score} / {questions.length}
+                </span>
+                <span className="text-xs font-semibold text-stone-500 block mt-1">
+                  {questions.length > 0 ? Math.round((score / questions.length) * 100) : 0}% Accuracy
+                </span>
+              </div>
+
+              <div className="flex flex-wrap gap-2 justify-center pt-2">
+                <button
+                  onClick={handleRestart}
+                  className="px-5 py-2.5 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center gap-2 shadow-sm transition-all"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Retry Same Surah</span>
+                </button>
+                <button
+                  onClick={() => setIsSurahPickerOpen(true)}
+                  className="px-5 py-2.5 rounded-2xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-800 dark:text-stone-200 font-bold text-xs flex items-center gap-2 transition-all hover:bg-stone-100"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Change Surah</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Searchable 114 Surahs Modal Picker */}
+          {isSurahPickerOpen && (
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-[#faf8f5] dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-3xl p-5 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 max-h-[85vh] flex flex-col">
+                <div className="flex items-center justify-between pb-2 border-b border-stone-200 dark:border-stone-800">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="w-5 h-5 text-emerald-600" />
+                    <h3 className="font-bold text-base text-stone-900 dark:text-stone-100">
+                      Select Surah for Recall
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setIsSurahPickerOpen(false)}
+                    className="p-1 rounded-full text-stone-400 hover:text-stone-600 dark:hover:text-stone-200"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Search Bar */}
+                <div className="relative">
+                  <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={surahSearchQuery}
+                    onChange={(e) => setSurahSearchQuery(e.target.value)}
+                    placeholder="Search by name, number, or translation..."
+                    className="w-full pl-9 pr-4 py-2.5 rounded-2xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-xs text-stone-900 dark:text-stone-100 focus:outline-hidden focus:border-emerald-600"
+                  />
+                  {surahSearchQuery && (
+                    <button
+                      onClick={() => setSurahSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Special Option: All 114 Surahs */}
+                <div>
+                  <button
+                    onClick={() => {
+                      setSelectedSurahNumber(0);
+                      setIsSurahPickerOpen(false);
+                    }}
+                    className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between transition-all ${
+                      selectedSurahNumber === 0
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        : 'bg-white dark:bg-stone-800 border-emerald-600/30 text-emerald-800 dark:text-emerald-300 hover:border-emerald-600'
+                    }`}
+                  >
+                    <div>
+                      <div className="font-bold text-xs">✨ All 114 Surahs (Mixed Challenge)</div>
+                      <div className="text-[11px] opacity-80">Test your mastery across the entire Quran</div>
+                    </div>
+                    <span className="font-quran text-base" dir="rtl">
+                      جميع السور
+                    </span>
+                  </button>
+                </div>
+
+                {/* List of 114 Surahs */}
+                <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 divide-y divide-stone-100 dark:divide-stone-800">
+                  {filteredSurahs.map((surah) => {
+                    const isSelected = selectedSurahNumber === surah.number;
+                    return (
+                      <button
+                        key={surah.number}
+                        onClick={() => {
+                          setSelectedSurahNumber(surah.number);
+                          setIsSurahPickerOpen(false);
+                        }}
+                        className={`w-full p-2.5 rounded-xl text-left flex items-center justify-between transition-all ${
+                          isSelected
+                            ? 'bg-emerald-600 text-white font-bold'
+                            : 'hover:bg-white dark:hover:bg-stone-800 text-stone-800 dark:text-stone-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${
+                            isSelected ? 'bg-white/20 text-white' : 'bg-stone-100 dark:bg-stone-800 text-stone-500'
+                          }`}>
+                            {surah.number}
+                          </span>
+                          <div>
+                            <p className="font-bold text-xs leading-tight">
+                              {surah.englishName}
+                            </p>
+                            <p className={`text-[10px] ${isSelected ? 'text-white/80' : 'text-stone-400'}`}>
+                              {surah.englishNameTranslation} • {surah.numberOfAyahs} Ayahs
+                            </p>
+                          </div>
+                        </div>
+
+                        <span className="font-quran text-base" dir="rtl">
+                          {surah.name}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

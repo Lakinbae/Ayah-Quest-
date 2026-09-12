@@ -44,7 +44,19 @@ const DEFAULT_USER: UserProfile = {
 };
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabType>('home');
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('duel') || params.get('challenge') || params.get('room') || params.get('tgWebAppStartParam')) {
+        return 'quiz';
+      }
+      const tgParam = (window as any).Telegram?.WebApp?.initDataUnsafe?.start_param;
+      if (tgParam && (tgParam.startsWith('duel') || tgParam.startsWith('room'))) {
+        return 'quiz';
+      }
+    } catch {}
+    return 'home';
+  });
   const [targetHifzSurah, setTargetHifzSurah] = useState<number | undefined>(undefined);
 
   // User state - starts with authentic clean storage (0/5 clean start)
