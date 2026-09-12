@@ -53,7 +53,9 @@ export const QuizView: React.FC<QuizViewProps> = ({
   const [arenaTab, setArenaTab] = useState<'solo' | 'duel'>(() => {
     try {
       const p = new URLSearchParams(window.location.search);
-      if (p.get('duel') || p.get('challenge') || p.get('room')) return 'duel';
+      if (p.get('duel') || p.get('challenge') || p.get('room') || p.get('join') || p.get('tgWebAppStartParam')) return 'duel';
+      const tgParam = (window as any).Telegram?.WebApp?.initDataUnsafe?.start_param;
+      if (tgParam && (tgParam.startsWith('duel') || tgParam.startsWith('room') || tgParam.startsWith('join'))) return 'duel';
     } catch {}
     return initialArenaTab;
   });

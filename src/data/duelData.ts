@@ -683,23 +683,32 @@ export function formatTelegramChallengeMessage(params: {
   challengeUrl: string;
 }): string {
   const diffLabel = 
-    params.difficulty === 'mutqin' ? '🔴 ممتاز (Mumtaz Master)' :
-    params.difficulty === 'hafiz' ? '🟡 حافظ (Hafiz Intermediate)' : '🟢 طالب (Talib Student)';
+    params.difficulty === 'mutqin' ? '🔴 Mumtaz (Master)' :
+    params.difficulty === 'hafiz' ? '🟡 Hafiz (Intermediate)' : '🟢 Talib (Student)';
+
+  const cleanSurahTitle = params.surahTitle
+    .replace(' (كامل المصحف)', ' (Complete Quran)')
+    .replace('كامل المصحف', 'Complete Quran');
+
+  const sender = params.challengerName && params.challengerName !== 'Companion in Faith'
+    ? `${params.challengerName} challenges you`
+    : 'I challenge you';
 
   return (
-`✨ *تَحَدِّي حِفْظِ وَتَدَبُّرِ القُرْآنِ الكَرِيمِ* ✨
-📖 *Quran Challenge & Mutadarasa*
+`✨ *QURAN CHALLENGE — BEAT MY SCORE* ✨
+📖 *Quran Memorization & Study Challenge*
 
-السلام عليكم ورحمة الله وبركاته!
-أتحداك يا أخي في منافسة شريفة في كتاب الله 📖
+Peace be upon you!
+${sender} to a friendly competition in the Book of Allah 📖
 
-🎯 *Surah*: ${params.surahTitle}
-⚡ *Score*: ${params.score}/${params.totalQuestions} in ${params.timeSeconds}s!
+🎯 *Surah*: ${cleanSurahTitle}
+⚡ *Score to Beat*: ${params.score}/${params.totalQuestions} in ${params.timeSeconds}s!
 🏆 *Level*: ${diffLabel}
 
 «وَفِي ذَٰلِكَ فَلْيَتَنَافَسِ الْمُتَنَافِسُونَ»
+_"And for this let the competitors compete." (Surah Al-Mutaffifin: 26)_
 
-👇 *Tap here to accept my Quran challenge:*
+👇 *Tap here to accept my Quran challenge and beat my score:*
 ${params.challengeUrl}`
   );
 }

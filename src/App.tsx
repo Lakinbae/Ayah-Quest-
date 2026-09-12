@@ -47,11 +47,11 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('duel') || params.get('challenge') || params.get('room') || params.get('tgWebAppStartParam')) {
+      if (params.get('duel') || params.get('challenge') || params.get('room') || params.get('join') || params.get('tgWebAppStartParam')) {
         return 'quiz';
       }
       const tgParam = (window as any).Telegram?.WebApp?.initDataUnsafe?.start_param;
-      if (tgParam && (tgParam.startsWith('duel') || tgParam.startsWith('room'))) {
+      if (tgParam && (tgParam.startsWith('duel') || tgParam.startsWith('room') || tgParam.startsWith('join'))) {
         return 'quiz';
       }
     } catch {}
@@ -322,7 +322,7 @@ export default function App() {
         )}
 
         {activeTab === 'quiz' && (
-          <QuizView />
+          <QuizView user={user} />
         )}
 
         {activeTab === 'progress' && (

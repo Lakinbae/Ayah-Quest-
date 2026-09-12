@@ -99,10 +99,40 @@ export const FriendDuelView: React.FC<FriendDuelViewProps> = ({
   // -------------------------------------------------------------
   // Mode 2: Real-time 1v1 Live Room Duel State
   // -------------------------------------------------------------
-  const [roomCode, setRoomCode] = useState<string>(initialRoomCode || '');
+  // Synchronously parse URL query & Telegram Mini App params to avoid any race condition or accidental Host role
+  const getInitialRoomParams = () => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const roomParam = params.get('room') || params.get('join') || '';
+      const roleParam = params.get('role');
+      const tgStartParam = 
+        (window as any).Telegram?.WebApp?.initDataUnsafe?.start_param || 
+        params.get('tgWebAppStartParam') || '';
+      let tgRoom = '';
+      if (tgStartParam.startsWith('room_')) {
+        tgRoom = tgStartParam.replace('room_', '');
+      } else if (tgStartParam.startsWith('join_')) {
+        tgRoom = tgStartParam.replace('join_', '');
+      }
+      const finalCode = (initialRoomCode || roomParam || tgRoom).trim().toUpperCase();
+      // If a code was present in URL or role is explicitly guest, user is an OPPONENT / GUEST (isHost: false)
+      const isJoiningAsGuest = Boolean(finalCode) || roleParam === 'guest' || roleParam === 'opponent';
+      return {
+        code: finalCode,
+        isHost: !isJoiningAsGuest,
+        subView: finalCode ? ('live_lobby' as const) : ('hub' as const),
+      };
+    } catch {
+      return { code: initialRoomCode || '', isHost: !initialRoomCode, subView: 'hub' as const };
+    }
+  };
+
+  const initialRoomMeta = getInitialRoomParams();
+
+  const [roomCode, setRoomCode] = useState<string>(initialRoomMeta.code);
   const [joinCodeInput, setJoinCodeInput] = useState<string>('');
   const [liveTab, setLiveTab] = useState<'host' | 'join'>('host');
-  const [isHost, setIsHost] = useState<boolean>(!initialRoomCode);
+  const [isHost, setIsHost] = useState<boolean>(initialRoomMeta.isHost);
   const [opponentName, setOpponentName] = useState<string>('');
   const [isOpponentConnected, setIsOpponentConnected] = useState<boolean>(false);
   const [isBotOpponent, setIsBotOpponent] = useState<boolean>(false);
@@ -128,6 +158,61 @@ export const FriendDuelView: React.FC<FriendDuelViewProps> = ({
   const surahsCache = useRef<Record<number, Surah>>({});
 
   // -------------------------------------------------------------
+  // Server-side Room Synchronization (Cross-device & Telegram)
+  // -------------------------------------------------------------
+  const createRoomOnServer = async (code: string, surah: number, diff: string, count: number, seed: number) => {
+    try {
+      const res = await fetch('/api/rooms/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code,
+          hostName: user.first_name || 'Host Companion',
+          hostId: user.id || 'host_user',
+          surahNum: surah,
+          diff,
+          questionCount: count,
+          seed,
+        }),
+      });
+      return await res.json();
+    } catch (e) {
+      console.warn('Server room create fallback:', e);
+      return null;
+    }
+  };
+
+  const joinRoomOnServer = async (code: string, guestName: string) => {
+    try {
+      const res = await fetch('/api/rooms/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code,
+          guestName,
+          guestId: user.id || 'guest_user',
+        }),
+      });
+      const data = await res.json();
+      if (data && data.room) {
+        const r = data.room;
+        if (r.surahNum !== undefined) setSelectedSurahNum(r.surahNum);
+        if (r.diff) setSelectedDifficulty(r.diff as DuelDifficulty);
+        if (r.questionCount) setQuestionCount(r.questionCount);
+        if (r.seed) setLiveSeed(r.seed);
+        if (r.hostName) {
+          setOpponentName(r.hostName);
+          setIsOpponentConnected(true);
+        }
+      }
+      return data;
+    } catch (e) {
+      console.warn('Server room join fallback:', e);
+      return null;
+    }
+  };
+
+  // -------------------------------------------------------------
   // URL Query & Telegram Deep-Link Parsing
   // -------------------------------------------------------------
   useEffect(() => {
@@ -143,7 +228,7 @@ export const FriendDuelView: React.FC<FriendDuelViewProps> = ({
       let countStr = params.get('cnt');
       let roomParam = params.get('room') || params.get('join');
 
-      // Check Telegram Mini App start_param (e.g. ?tgWebAppStartParam=duel_42_67_mutqin_Ahmad_5_22)
+      // Check Telegram Mini App start_param (e.g. ?tgWebAppStartParam=duel_42_67_mutqin_Ahmad_5_22 or room_AYAH42)
       const tgStartParam = 
         (window as any).Telegram?.WebApp?.initDataUnsafe?.start_param || 
         params.get('tgWebAppStartParam');
@@ -162,6 +247,8 @@ export const FriendDuelView: React.FC<FriendDuelViewProps> = ({
         }
       } else if (tgStartParam && tgStartParam.startsWith('room_')) {
         roomParam = tgStartParam.replace('room_', '');
+      } else if (tgStartParam && tgStartParam.startsWith('join_')) {
+        roomParam = tgStartParam.replace('join_', '');
       }
 
       if (by && scoreStr && timeStr && seedStr) {
@@ -203,16 +290,88 @@ export const FriendDuelView: React.FC<FriendDuelViewProps> = ({
           setAsynQuestions(getQuestionsBySeed(parsedSeed, parsedCount, { difficulty: parsedDiff }));
         }
       } else if (roomParam) {
+        // User joined via link: GUARANTEED OPPONENT / GUEST
         const code = roomParam.trim().toUpperCase();
         setRoomCode(code);
         setIsHost(false);
         setSubView('live_lobby');
+        joinRoomOnServer(code, user.first_name || 'Companion');
         setupBroadcast(code, false);
       }
     } catch (e) {
       console.warn('URL param parse error:', e);
     }
   }, []);
+
+  // -------------------------------------------------------------
+  // Real-time Room Polling Effect (Lobby and In-Game Live Sync)
+  // -------------------------------------------------------------
+  useEffect(() => {
+    if (!roomCode || (subView !== 'live_lobby' && subView !== 'live_playing')) return;
+
+    let isMounted = true;
+    const pollInterval = window.setInterval(async () => {
+      try {
+        const res = await fetch(`/api/rooms/${roomCode}`);
+        if (!res.ok || !isMounted) return;
+        const data = await res.json();
+        if (!data.success || !data.room) return;
+        const r = data.room;
+
+        if (subView === 'live_lobby') {
+          if (isHost) {
+            // Host listening for guest joining
+            if (r.guestName && !isOpponentConnected) {
+              setOpponentName(r.guestName);
+              setIsOpponentConnected(true);
+              showToast(`🟢 ${r.guestName} joined as your opponent!`);
+            }
+          } else {
+            // Guest / Opponent listening for host & game start
+            if (r.hostName) {
+              setOpponentName(r.hostName);
+              setIsOpponentConnected(true);
+            }
+            if (r.surahNum !== undefined && r.surahNum !== selectedSurahNum) {
+              setSelectedSurahNum(r.surahNum);
+            }
+            if (r.diff && r.diff !== selectedDifficulty) {
+              setSelectedDifficulty(r.diff as DuelDifficulty);
+            }
+            if (r.questionCount && r.questionCount !== questionCount) {
+              setQuestionCount(r.questionCount);
+            }
+            // If Host clicked "Start Live Duel"
+            if (r.status === 'playing' && subView === 'live_lobby' && liveCountdown === null) {
+              const seed = r.seed || 42;
+              setLiveSeed(seed);
+              const qs = getQuestionsBySeed(seed, r.questionCount || questionCount, {
+                surahNumber: r.surahNum || selectedSurahNum,
+                surahData: loadedSurahData || undefined,
+                difficulty: (r.diff as DuelDifficulty) || selectedDifficulty,
+              });
+              setLiveQuestions(qs);
+              startCountdownFlow();
+            }
+          }
+        } else if (subView === 'live_playing') {
+          // Sync scores in real-time during live match
+          if (isHost) {
+            if (typeof r.guestScore === 'number') setLiveOpponentScore(r.guestScore);
+            if (typeof r.guestQIndex === 'number') setLiveOpponentQIndex(r.guestQIndex);
+          } else {
+            if (typeof r.hostScore === 'number') setLiveOpponentScore(r.hostScore);
+            if (typeof r.hostQIndex === 'number') setLiveOpponentQIndex(r.hostQIndex);
+          }
+        }
+      } catch {}
+    }, 1000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(pollInterval);
+    };
+  }, [roomCode, subView, isHost, isOpponentConnected, selectedSurahNum, selectedDifficulty, questionCount, liveCountdown, loadedSurahData]);
 
   // Pre-load selected surah when user changes it in Hub
   useEffect(() => {
@@ -239,9 +398,9 @@ export const FriendDuelView: React.FC<FriendDuelViewProps> = ({
 
   // Current Surah Title Label
   const getActiveSurahTitle = (surahNum: number = selectedSurahNum) => {
-    if (surahNum === 0) return 'All 114 Surahs (كامل المصحف)';
+    if (surahNum === 0) return 'All 114 Surahs (Complete Quran)';
     const meta = SURAH_LIST.find((s) => s.number === surahNum);
-    return meta ? `${meta.name} (${meta.englishName})` : `Surah ${surahNum}`;
+    return meta ? `${meta.englishName} (${meta.name})` : `Surah ${surahNum}`;
   };
 
   // -------------------------------------------------------------
@@ -394,7 +553,7 @@ Reference: ${dua.source || 'Prophetic Tradition'}
   // -------------------------------------------------------------
   // Live Room Handlers
   // -------------------------------------------------------------
-  const initHostRoom = () => {
+  const initHostRoom = async () => {
     const newCode = generateRoomCode();
     setRoomCode(newCode);
     setIsHost(true);
@@ -402,25 +561,34 @@ Reference: ${dua.source || 'Prophetic Tradition'}
     setIsOpponentConnected(false);
     setIsBotOpponent(false);
     setSubView('live_lobby');
+    showToast(`Created Room ${newCode}! Share with your companion.`);
+
+    const seed = Math.floor(Math.random() * 10000) + 1;
+    setLiveSeed(seed);
+    await createRoomOnServer(newCode, selectedSurahNum, selectedDifficulty, questionCount, seed);
     setupBroadcast(newCode, true);
   };
 
-  const initJoinRoom = (code: string) => {
+  const initJoinRoom = async (code: string) => {
     const clean = code.trim().toUpperCase();
     if (!clean) return;
     setRoomCode(clean);
-    setIsHost(false);
+    setIsHost(false); // ALWAYS FALSE: Explicitly registered as Guest / Opponent
     setOpponentName('');
     setIsOpponentConnected(false);
     setIsBotOpponent(false);
     setSubView('live_lobby');
+    showToast(`Joining Room ${clean} as Opponent...`);
+
+    await joinRoomOnServer(clean, user.first_name || 'Companion');
     setupBroadcast(clean, false);
-    showToast(`Joining Room ${clean}...`);
   };
 
-  const setupBroadcast = (code: string, amIHost: boolean = isHost) => {
+  const setupBroadcast = (code: string, amIHost: boolean) => {
     if (broadcastChannelRef.current) {
-      broadcastChannelRef.current.close();
+      try {
+        broadcastChannelRef.current.close();
+      } catch {}
     }
 
     try {
@@ -538,8 +706,21 @@ Reference: ${dua.source || 'Prophetic Tradition'}
     showToast('🤖 Hafiz Companion joined! Starting live duel...');
   };
 
-  const handleTriggerStartDuel = () => {
-    const seed = Math.floor(Math.random() * 10000) + 1;
+  const reportLiveAnswerToServer = (score: number, qIdx: number) => {
+    if (!roomCode) return;
+    fetch(`/api/rooms/${roomCode}/progress`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        isHost,
+        score,
+        qIndex: qIdx,
+      }),
+    }).catch(() => {});
+  };
+
+  const handleTriggerStartDuel = async () => {
+    const seed = liveSeed || Math.floor(Math.random() * 10000) + 1;
     setLiveSeed(seed);
 
     const qs = getQuestionsBySeed(seed, questionCount, {
@@ -555,8 +736,17 @@ Reference: ${dua.source || 'Prophetic Tradition'}
         seed,
         surahNum: selectedSurahNum,
         diff: selectedDifficulty,
+        count: questionCount,
       });
     }
+
+    try {
+      await fetch(`/api/rooms/${roomCode}/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seed }),
+      });
+    } catch {}
 
     startCountdownFlow();
   };
@@ -631,6 +821,7 @@ Reference: ${dua.source || 'Prophetic Tradition'}
   const handleLiveTimeExpired = () => {
     if (qTimerRef.current) clearInterval(qTimerRef.current);
     setLiveIsAnswered(true);
+    reportLiveAnswerToServer(liveMyScore, liveQIndex + 1);
     setTimeout(() => {
       advanceLiveQuestion();
     }, 1400);
@@ -649,6 +840,8 @@ Reference: ${dua.source || 'Prophetic Tradition'}
       newScore += 1;
       setLiveMyScore(newScore);
     }
+
+    reportLiveAnswerToServer(newScore, liveQIndex + 1);
 
     if (broadcastChannelRef.current) {
       broadcastChannelRef.current.postMessage({
@@ -1388,6 +1581,27 @@ Reference: ${dua.source || 'Prophetic Tradition'}
                   <span>Copy Web Link</span>
                 </button>
               </div>
+
+              {/* Telegram Invite Preview Card */}
+              <div className="p-3 rounded-2xl bg-stone-100/90 dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 text-left space-y-1.5 mt-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500">
+                    Invite Message Preview
+                  </span>
+                  <span className="text-[9px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                    English with Quran Verse
+                  </span>
+                </div>
+                <div className="text-[11px] text-stone-700 dark:text-stone-300 bg-white dark:bg-stone-900 p-2.5 rounded-xl border border-stone-200 dark:border-stone-800 whitespace-pre-line leading-relaxed">
+                  <p className="font-bold text-emerald-700 dark:text-emerald-400">✨ QURAN CHALLENGE — BEAT MY SCORE ✨</p>
+                  <p className="text-stone-500 text-[10px]">Peace be upon you! I challenge you to a friendly competition in the Book of Allah 📖</p>
+                  <p className="mt-1">🎯 <strong>Surah:</strong> {getActiveSurahTitle(selectedSurahNum)}</p>
+                  <p>⚡ <strong>Score to Beat:</strong> {asynScore}/{asynQuestions.length} in {asynElapsedSeconds}s!</p>
+                  <p>🏆 <strong>Level:</strong> {selectedDifficulty === 'mutqin' ? '🔴 Mumtaz (Master)' : selectedDifficulty === 'hafiz' ? '🟡 Hafiz (Intermediate)' : '🟢 Talib (Student)'}</p>
+                  <p className="font-quran text-sm text-emerald-800 dark:text-emerald-200 my-1 text-center" dir="rtl">«وَفِي ذَٰلِكَ فَلْيَتَنَافَسِ الْمُتَنَافِسُونَ»</p>
+                  <p className="text-[10px] italic text-stone-500 text-center">"And for this let the competitors compete." (Surah Al-Mutaffifin: 26)</p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1479,29 +1693,31 @@ Reference: ${dua.source || 'Prophetic Tradition'}
       {subView === 'live_lobby' && (
         <div className="bg-[#faf8f5] dark:bg-stone-900 p-6 rounded-3xl border border-stone-200/90 dark:border-stone-800 shadow-sm space-y-5 animate-in fade-in">
           <div className="text-center space-y-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-              Live Multiplayer Match
-            </span>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 text-xs font-bold uppercase tracking-wider mb-1">
+              {isHost ? '👑 You are the Room Host' : '⚔️ You are the Opponent'}
+            </div>
             <h2 className="text-xl font-black text-stone-900 dark:text-stone-100">
               Room Code: <span className="font-mono text-emerald-600 font-bold text-2xl tracking-widest">{roomCode}</span>
             </h2>
             <p className="text-xs text-stone-500">
-              Selected: {getActiveSurahTitle()} • Difficulty: {selectedDifficulty.toUpperCase()}
+              Surah: {getActiveSurahTitle()} • Difficulty: {selectedDifficulty.toUpperCase()} • {questionCount} Verses
             </p>
           </div>
 
           {/* Connected Players Status */}
           <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700">
+            {/* Player 1 (You) */}
             <div className="text-center space-y-1">
               <div className="w-10 h-10 mx-auto rounded-full bg-emerald-700 text-white flex items-center justify-center font-bold text-sm">
                 {user.first_name ? user.first_name[0] : 'U'}
               </div>
               <p className="text-xs font-bold text-stone-800 dark:text-stone-200">
-                {user.first_name || 'You'} ({isHost ? 'Host' : 'Guest'})
+                {user.first_name || 'You'} ({isHost ? 'Host 👑' : 'Opponent ⚔️'})
               </p>
-              <span className="text-[10px] text-emerald-600 font-semibold">Ready</span>
+              <span className="text-[10px] text-emerald-600 font-semibold">Ready in Lobby</span>
             </div>
 
+            {/* Player 2 (Opponent / Host) */}
             <div className="text-center space-y-1">
               <div className={`w-10 h-10 mx-auto rounded-full flex items-center justify-center font-bold text-sm ${
                 isOpponentConnected ? 'bg-amber-600 text-white' : 'bg-stone-200 dark:bg-stone-700 text-stone-400'
@@ -1509,39 +1725,61 @@ Reference: ${dua.source || 'Prophetic Tradition'}
                 {isOpponentConnected ? (opponentName ? opponentName[0] : 'O') : '?'}
               </div>
               <p className="text-xs font-bold text-stone-800 dark:text-stone-200">
-                {isOpponentConnected ? `${opponentName || 'Opponent'} (${isHost ? 'Guest' : 'Host'})` : (isHost ? 'Waiting for Friend...' : 'Connecting to Host...')}
+                {isOpponentConnected
+                  ? `${opponentName || (isHost ? 'Opponent' : 'Host')} (${isHost ? 'Opponent ⚔️' : 'Host 👑'})`
+                  : isHost
+                  ? 'Waiting for Friend...'
+                  : 'Connecting to Host...'}
               </p>
               <span className={`text-[10px] font-semibold ${isOpponentConnected ? 'text-emerald-600' : 'text-stone-400 animate-pulse'}`}>
-                {isOpponentConnected ? 'Connected' : isHost ? 'Share code with friend' : 'Awaiting host link'}
+                {isOpponentConnected ? 'Connected & Ready' : isHost ? 'Share code below' : 'Awaiting host link'}
               </span>
             </div>
           </div>
 
-          {/* Share room code to friend */}
-          <div className="flex gap-2">
-            <button
-              onClick={() => {
-                const url = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
-                navigator.clipboard.writeText(`⚡ Join my Live Quran Duel Room! Code: ${roomCode}\nLink: ${url}`);
-                showToast('Room invite copied!');
-              }}
-              className="flex-1 py-2.5 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 text-stone-700 dark:text-stone-300 font-bold text-xs flex items-center justify-center gap-1.5 border border-stone-300 dark:border-stone-700"
-            >
-              <Copy className="w-3.5 h-3.5" />
-              <span>Copy Room Code</span>
-            </button>
-            <button
-              onClick={() => {
-                const url = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
-                const text = `⚡ Join my Live Quran Duel Room! Code: ${roomCode}\nLink: ${url}`;
-                shareToTelegram(url, text);
-              }}
-              className="flex-1 py-2.5 rounded-xl bg-[#229ED9] hover:bg-[#1E88E5] text-white font-bold text-xs flex items-center justify-center gap-1.5"
-            >
-              <Send className="w-3.5 h-3.5" />
-              <span>Send on Telegram</span>
-            </button>
-          </div>
+          {/* HOST ONLY: Share room code and Telegram invite */}
+          {isHost ? (
+            <div className="space-y-2">
+              <p className="text-xs text-center text-stone-500 font-medium">
+                Send this code or invite link to your friend on Telegram to compete!
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    const url = `${window.location.origin}${window.location.pathname}?room=${roomCode}&role=guest`;
+                    navigator.clipboard.writeText(`⚡ Join my Live Quran Duel Room!\nRoom Code: ${roomCode}\nSurah: ${getActiveSurahTitle()}\nJoin as my opponent: ${url}`);
+                    showToast('Room code & link copied to clipboard!');
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 text-stone-700 dark:text-stone-300 font-bold text-xs flex items-center justify-center gap-1.5 border border-stone-300 dark:border-stone-700 transition-colors"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copy Code & Link</span>
+                </button>
+                <button
+                  onClick={() => {
+                    const url = `${window.location.origin}${window.location.pathname}?room=${roomCode}&role=guest`;
+                    const text = `⚡ Join my Live Quran Duel Room!\nRoom Code: ${roomCode}\nSurah: ${getActiveSurahTitle()}\nTap this link to enter as my opponent: ${url}`;
+                    shareToTelegram(url, text);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-[#229ED9] hover:bg-[#1E88E5] text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Invite on Telegram</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* GUEST ONLY: Friendly confirmation of their opponent role */
+            <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-center space-y-1">
+              <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                <Swords className="w-4 h-4 text-emerald-600" />
+                <span>You joined Room {roomCode} as Opponent</span>
+              </div>
+              <p className="text-[11px] text-stone-600 dark:text-stone-400">
+                Host: <strong className="text-stone-900 dark:text-stone-100">{opponentName || 'Companion'}</strong> • Surah: {getActiveSurahTitle()} ({selectedDifficulty.toUpperCase()})
+              </p>
+            </div>
+          )}
 
           {/* Solo AI Bot option if waiting */}
           {!isOpponentConnected && isHost && (
@@ -1555,13 +1793,17 @@ Reference: ${dua.source || 'Prophetic Tradition'}
             </div>
           )}
 
-          {/* Start Duel button */}
+          {/* Start Duel button / Waiting status */}
           <div className="flex gap-2 pt-2">
             <button
-              onClick={() => setSubView('hub')}
-              className="py-3 px-4 rounded-2xl bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 font-bold text-xs"
+              onClick={() => {
+                setSubView('hub');
+                setIsOpponentConnected(false);
+                setOpponentName('');
+              }}
+              className="py-3 px-4 rounded-2xl bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 font-bold text-xs transition-colors"
             >
-              Exit
+              Leave Room
             </button>
             {isHost ? (
               <button
@@ -1573,9 +1815,9 @@ Reference: ${dua.source || 'Prophetic Tradition'}
                 <span>{isOpponentConnected ? 'Start Live Duel!' : 'Waiting for Opponent to Join...'}</span>
               </button>
             ) : (
-              <div className="flex-1 py-3 px-4 rounded-2xl bg-stone-200 dark:bg-stone-800 text-stone-600 dark:text-stone-300 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 text-center">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                <span>{isOpponentConnected ? 'Waiting for Host to Start Match...' : 'Connecting to Room...'}</span>
+              <div className="flex-1 py-3 px-4 rounded-2xl bg-emerald-900/10 dark:bg-emerald-950/40 border border-emerald-600/30 text-emerald-800 dark:text-emerald-200 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 text-center">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                <span>{isOpponentConnected ? `Waiting for Host (${opponentName || 'Host'}) to Start...` : 'Connecting to Host...'}</span>
               </div>
             )}
           </div>
