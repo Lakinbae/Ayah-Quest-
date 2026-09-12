@@ -23,6 +23,7 @@ import { SURAH_LIST } from '../data/surahList';
 import { SURAHS_DATA } from '../data/quranData';
 import { fetchSurah } from '../data/quranApi';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import { realtimeRoom, RoomMessage } from '../utils/realtimeRoom';
 
 interface FriendDuelViewProps {
   user: UserProfile;
@@ -643,6 +644,64 @@ Reference: ${dua.source || 'Prophetic Tradition'}
       }
     } catch {}
 
+    // Universal Cross-Device Real-Time Sync (Pub/Sub + SSE + REST relay)
+    realtimeRoom.connect({
+      code,
+      isHost: amIHost,
+      userId: String(user.id || (amIHost ? 'host' : 'guest')),
+      userName: user.first_name || (amIHost ? 'Host' : 'Opponent'),
+      onMessage: (msg: RoomMessage) => {
+        if (msg.type === 'GUEST_JOINED') {
+          setOpponentName(msg.senderName || 'Companion');
+          setIsOpponentConnected(true);
+          showToast(`🟢 ${msg.senderName || 'Companion'} connected as your opponent!`);
+          if (amIHost) {
+            realtimeRoom.publish({
+              type: 'HOST_ACCEPTED',
+              surahNum: selectedSurahNum,
+              diff: selectedDifficulty,
+              count: questionCount,
+              seed: liveSeed || 1001,
+            });
+          }
+        } else if (msg.type === 'HOST_ACCEPTED' || (msg.type === 'HOST_PRESENCE' && !amIHost)) {
+          setOpponentName(msg.senderName || 'Host');
+          if (typeof msg.surahNum === 'number') setSelectedSurahNum(msg.surahNum);
+          if (msg.diff) setSelectedDifficulty(msg.diff as any);
+          if (typeof msg.seed === 'number') setLiveSeed(msg.seed);
+          setIsOpponentConnected(true);
+          showToast(`Connected to Host: ${msg.senderName || 'Host'}`);
+        } else if (msg.type === 'START_MATCH') {
+          const s = msg.seed ?? liveSeed ?? 1001;
+          setLiveSeed(s);
+          const qs = getQuestionsBySeed(s, msg.count || questionCount, {
+            surahNumber: msg.surahNum !== undefined ? msg.surahNum : selectedSurahNum,
+            surahData: loadedSurahData || undefined,
+            difficulty: (msg.diff as any) || selectedDifficulty,
+          });
+          setLiveQuestions(qs);
+          startCountdownFlow();
+        } else if (msg.type === 'SCORE_UPDATE') {
+          if (typeof msg.score === 'number') setLiveOpponentScore(msg.score);
+          if (typeof msg.qIndex === 'number') setLiveOpponentQIndex(msg.qIndex);
+        }
+      },
+    });
+
+    if (amIHost) {
+      realtimeRoom.publish({
+        type: 'HOST_PRESENCE',
+        surahNum: selectedSurahNum,
+        diff: selectedDifficulty,
+        count: questionCount,
+        seed: liveSeed || 1001,
+      });
+    } else {
+      realtimeRoom.publish({
+        type: 'GUEST_JOINED',
+      });
+    }
+
     if (isSupabaseConfigured && supabase) {
       try {
         const sbChannel = supabase.channel(`room_${code}`);
@@ -708,6 +767,11 @@ Reference: ${dua.source || 'Prophetic Tradition'}
 
   const reportLiveAnswerToServer = (score: number, qIdx: number) => {
     if (!roomCode) return;
+    realtimeRoom.publish({
+      type: 'SCORE_UPDATE',
+      score,
+      qIndex: qIdx,
+    });
     fetch(`/api/rooms/${roomCode}/progress`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -729,6 +793,14 @@ Reference: ${dua.source || 'Prophetic Tradition'}
       difficulty: selectedDifficulty,
     });
     setLiveQuestions(qs);
+
+    realtimeRoom.publish({
+      type: 'START_MATCH',
+      seed,
+      surahNum: selectedSurahNum,
+      diff: selectedDifficulty,
+      count: questionCount,
+    });
 
     if (broadcastChannelRef.current) {
       broadcastChannelRef.current.postMessage({
@@ -880,28 +952,21 @@ Reference: ${dua.source || 'Prophetic Tradition'}
     );
   });
 
-  // Render question option text clearly separating Arabic and English notes with line breaks
+  // Render question option purely in Arabic, stripping any English hints or bracketed descriptions
   const renderDuelOptionText = (opt: string) => {
-    // Check if option format has parenthetical English clarification, e.g., "وَكُلَا مِنْهَا رَغَدًا (Contains 'رَغَدًا')"
-    const match = opt.match(/^([^\(]+)\s*\((.+)\)$/);
-    if (match) {
-      const arabicPart = match[1].trim();
-      const notePart = match[2].trim();
-      return (
-        <div className="w-full text-left py-0.5 space-y-1">
-          <span className="font-quran text-base sm:text-lg block text-right font-medium leading-relaxed text-stone-900 dark:text-stone-100" dir="rtl">
-            {arabicPart}
-          </span>
-          <span className="block text-[11px] text-stone-500 dark:text-stone-400 font-sans font-normal border-t border-stone-200/60 dark:border-stone-700/60 pt-1 tracking-tight" dir="ltr">
-            ↳ {notePart}
-          </span>
-        </div>
-      );
-    }
-    const isArabic = /[\u0600-\u06FF]/.test(opt);
+    // Strip parenthetical notes/hints completely so options are challenging and pure
+    const cleanOpt = opt.replace(/\s*\([^)]*\)/g, '').trim() || opt;
+    const isArabic = /[\u0600-\u06FF]/.test(cleanOpt);
     return (
-      <span className={`block w-full ${isArabic ? 'font-quran text-base sm:text-lg text-right font-medium leading-relaxed' : 'text-xs sm:text-sm font-sans font-semibold text-left'}`} dir={isArabic ? 'rtl' : 'ltr'}>
-        {opt}
+      <span
+        className={`block w-full ${
+          isArabic
+            ? 'font-quran text-base sm:text-lg text-right font-medium leading-relaxed'
+            : 'text-xs sm:text-sm font-sans font-semibold text-left'
+        }`}
+        dir={isArabic ? 'rtl' : 'ltr'}
+      >
+        {cleanOpt}
       </span>
     );
   };
@@ -1271,10 +1336,10 @@ Reference: ${dua.source || 'Prophetic Tradition'}
                   <div className="space-y-2">
                     <input
                       type="text"
-                      placeholder="ENTER ROOM CODE (E.G. HIFZ42)"
+                      placeholder="ENTER ROOM CODE OR HOST USERNAME / ID"
                       value={joinCodeInput}
-                      onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
-                      maxLength={8}
+                      onChange={(e) => setJoinCodeInput(e.target.value)}
+                      maxLength={32}
                       className="w-full px-3.5 py-2.5 rounded-xl text-center text-sm uppercase font-mono font-bold bg-white dark:bg-stone-800 border-2 border-emerald-600 text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none"
                     />
                     <button
@@ -1285,6 +1350,9 @@ Reference: ${dua.source || 'Prophetic Tradition'}
                       <ArrowRight className="w-4 h-4" />
                       <span>Enter Live Match as Opponent</span>
                     </button>
+                    <p className="text-[10px] text-stone-500 dark:text-stone-400 text-center">
+                      Connect easily using either the room code or your friend's username/ID.
+                    </p>
                   </div>
                 )}
               </div>
@@ -1581,27 +1649,6 @@ Reference: ${dua.source || 'Prophetic Tradition'}
                   <span>Copy Web Link</span>
                 </button>
               </div>
-
-              {/* Telegram Invite Preview Card */}
-              <div className="p-3 rounded-2xl bg-stone-100/90 dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 text-left space-y-1.5 mt-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500">
-                    Invite Message Preview
-                  </span>
-                  <span className="text-[9px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-1.5 py-0.5 rounded">
-                    English with Quran Verse
-                  </span>
-                </div>
-                <div className="text-[11px] text-stone-700 dark:text-stone-300 bg-white dark:bg-stone-900 p-2.5 rounded-xl border border-stone-200 dark:border-stone-800 whitespace-pre-line leading-relaxed">
-                  <p className="font-bold text-emerald-700 dark:text-emerald-400">✨ QURAN CHALLENGE — BEAT MY SCORE ✨</p>
-                  <p className="text-stone-500 text-[10px]">Peace be upon you! I challenge you to a friendly competition in the Book of Allah 📖</p>
-                  <p className="mt-1">🎯 <strong>Surah:</strong> {getActiveSurahTitle(selectedSurahNum)}</p>
-                  <p>⚡ <strong>Score to Beat:</strong> {asynScore}/{asynQuestions.length} in {asynElapsedSeconds}s!</p>
-                  <p>🏆 <strong>Level:</strong> {selectedDifficulty === 'mutqin' ? '🔴 Mumtaz (Master)' : selectedDifficulty === 'hafiz' ? '🟡 Hafiz (Intermediate)' : '🟢 Talib (Student)'}</p>
-                  <p className="font-quran text-sm text-emerald-800 dark:text-emerald-200 my-1 text-center" dir="rtl">«وَفِي ذَٰلِكَ فَلْيَتَنَافَسِ الْمُتَنَافِسُونَ»</p>
-                  <p className="text-[10px] italic text-stone-500 text-center">"And for this let the competitors compete." (Surah Al-Mutaffifin: 26)</p>
-                </div>
-              </div>
             </div>
           </div>
 
@@ -1699,6 +1746,11 @@ Reference: ${dua.source || 'Prophetic Tradition'}
             <h2 className="text-xl font-black text-stone-900 dark:text-stone-100">
               Room Code: <span className="font-mono text-emerald-600 font-bold text-2xl tracking-widest">{roomCode}</span>
             </h2>
+            {isHost && (
+              <p className="text-[11px] text-stone-600 dark:text-stone-400 font-medium">
+                Your Host ID / Username: <strong className="font-mono text-emerald-700 dark:text-emerald-300">@{user.username || user.first_name || user.id || 'Host'}</strong>
+              </p>
+            )}
             <p className="text-xs text-stone-500">
               Surah: {getActiveSurahTitle()} • Difficulty: {selectedDifficulty.toUpperCase()} • {questionCount} Verses
             </p>
