@@ -15,6 +15,7 @@ export interface RoomMessage {
     | 'HOST_ACCEPTED' 
     | 'START_MATCH' 
     | 'SCORE_UPDATE' 
+    | 'PLAYER_FINISHED'
     | 'LEAVE_ROOM';
   senderId: string;
   senderName: string;
@@ -27,6 +28,8 @@ export interface RoomMessage {
   seed?: number;
   score?: number;
   qIndex?: number;
+  timeSeconds?: number;
+  finished?: boolean;
 }
 
 export type MessageListener = (msg: RoomMessage) => void;
@@ -172,7 +175,7 @@ class RealtimeRoomClient {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ seed: payload.seed }),
       }).catch(() => {});
-    } else if (payload.type === 'SCORE_UPDATE') {
+    } else if (payload.type === 'SCORE_UPDATE' || payload.type === 'PLAYER_FINISHED') {
       fetch(`/api/rooms/${this.code}/progress`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -180,6 +183,8 @@ class RealtimeRoomClient {
           isHost: this.isHost,
           score: payload.score ?? 0,
           qIndex: payload.qIndex ?? 0,
+          timeSeconds: payload.timeSeconds,
+          finished: payload.finished,
         }),
       }).catch(() => {});
     }

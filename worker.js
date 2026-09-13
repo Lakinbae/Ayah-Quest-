@@ -173,8 +173,12 @@ export default {
         room.status = "playing";
         room.hostScore = 0;
         room.hostQIndex = 0;
+        room.hostTimeSeconds = 0;
+        room.hostFinished = false;
         room.guestScore = 0;
         room.guestQIndex = 0;
+        room.guestTimeSeconds = 0;
+        room.guestFinished = false;
         room.lastUpdated = Date.now();
 
         return jsonResponse({ success: true, room });
@@ -190,13 +194,17 @@ export default {
 
         try {
           const body = await request.json();
-          const { isHost, score, qIndex } = body;
+          const { isHost, score, qIndex, timeSeconds, finished } = body;
           if (isHost) {
             if (typeof score === "number") room.hostScore = score;
             if (typeof qIndex === "number") room.hostQIndex = qIndex;
+            if (typeof timeSeconds === "number") room.hostTimeSeconds = timeSeconds;
+            if (finished !== undefined) room.hostFinished = !!finished;
           } else {
             if (typeof score === "number") room.guestScore = score;
             if (typeof qIndex === "number") room.guestQIndex = qIndex;
+            if (typeof timeSeconds === "number") room.guestTimeSeconds = timeSeconds;
+            if (finished !== undefined) room.guestFinished = !!finished;
           }
           room.lastUpdated = Date.now();
         } catch {}

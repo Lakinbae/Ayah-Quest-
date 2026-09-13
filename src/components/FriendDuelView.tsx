@@ -47,6 +47,7 @@ type DuelSubView =
   | 'asyn_result' 
   | 'live_lobby' 
   | 'live_playing' 
+  | 'live_waiting'
   | 'live_result';
 
 export const FriendDuelView: React.FC<FriendDuelViewProps> = ({
@@ -150,10 +151,35 @@ export const FriendDuelView: React.FC<FriendDuelViewProps> = ({
   const [liveIsAnswered, setLiveIsAnswered] = useState<boolean>(false);
   const [liveCountdown, setLiveCountdown] = useState<number | null>(null);
   const [qSecondsLeft, setQSecondsLeft] = useState<number>(20);
+  const [liveMyElapsedSeconds, setLiveMyElapsedSeconds] = useState<number>(0);
+  const [liveOpponentElapsedSeconds, setLiveOpponentElapsedSeconds] = useState<number>(0);
+  const [liveMyFinished, setLiveMyFinished] = useState<boolean>(false);
+  const [liveOpponentFinished, setLiveOpponentFinished] = useState<boolean>(false);
 
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
   const qTimerRef = useRef<number | null>(null);
   const botTimerRef = useRef<number | null>(null);
+  const liveMatchStartTimeRef = useRef<number>(0);
+  const liveMyFinishedRef = useRef<boolean>(false);
+  const liveOpponentFinishedRef = useRef<boolean>(false);
+  const botQIndexRef = useRef<number>(0);
+  const botScoreRef = useRef<number>(0);
+  const isBotOpponentRef = useRef<boolean>(false);
+  const liveQuestionsRef = useRef<DuelQuestion[]>([]);
+  const selectedDifficultyRef = useRef<DuelDifficulty>(selectedDifficulty);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    isBotOpponentRef.current = isBotOpponent;
+  }, [isBotOpponent]);
+
+  useEffect(() => {
+    liveQuestionsRef.current = liveQuestions;
+  }, [liveQuestions]);
+
+  useEffect(() => {
+    selectedDifficultyRef.current = selectedDifficulty;
+  }, [selectedDifficulty]);
 
   // Cache of fetched surahs
   const surahsCache = useRef<Record<number, Surah>>({});
@@ -308,7 +334,7 @@ export const FriendDuelView: React.FC<FriendDuelViewProps> = ({
   // Real-time Room Polling Effect (Lobby and In-Game Live Sync)
   // -------------------------------------------------------------
   useEffect(() => {
-    if (!roomCode || (subView !== 'live_lobby' && subView !== 'live_playing')) return;
+    if (!roomCode || (subView !== 'live_lobby' && subView !== 'live_playing' && subView !== 'live_waiting')) return;
 
     let isMounted = true;
     const pollInterval = window.setInterval(async () => {
@@ -355,14 +381,23 @@ export const FriendDuelView: React.FC<FriendDuelViewProps> = ({
               startCountdownFlow();
             }
           }
-        } else if (subView === 'live_playing') {
-          // Sync scores in real-time during live match
-          if (isHost) {
-            if (typeof r.guestScore === 'number') setLiveOpponentScore(r.guestScore);
-            if (typeof r.guestQIndex === 'number') setLiveOpponentQIndex(r.guestQIndex);
-          } else {
-            if (typeof r.hostScore === 'number') setLiveOpponentScore(r.hostScore);
-            if (typeof r.hostQIndex === 'number') setLiveOpponentQIndex(r.hostQIndex);
+        } else if ((subView === 'live_playing' || subView === 'live_waiting') && !isBotOpponentRef.current) {
+          // Sync scores & finished state in real-time during live match only for human multiplayer rooms
+          const oppScore = isHost ? r.guestScore : r.hostScore;
+          const oppQIdx = isHost ? r.guestQIndex : r.hostQIndex;
+          const oppTime = isHost ? r.guestTimeSeconds : r.hostTimeSeconds;
+          const oppFinished = isHost ? r.guestFinished : r.hostFinished;
+
+          if (typeof oppScore === 'number') setLiveOpponentScore(oppScore);
+          if (typeof oppQIdx === 'number') setLiveOpponentQIndex(oppQIdx);
+          if (typeof oppTime === 'number' && oppTime > 0) setLiveOpponentElapsedSeconds(oppTime);
+
+          if (oppFinished && !liveOpponentFinishedRef.current) {
+            setLiveOpponentFinished(true);
+            liveOpponentFinishedRef.current = true;
+            if (liveMyFinishedRef.current) {
+              setSubView('live_result');
+            }
           }
         }
       } catch {}
@@ -628,8 +663,21 @@ Reference: ${dua.source || 'Prophetic Tradition'}
           setLiveQuestions(qs);
           startCountdownFlow();
         } else if (data.type === 'OPPONENT_ANSWER') {
-          setLiveOpponentScore(data.score);
-          setLiveOpponentQIndex(data.qIndex);
+          if (!isBotOpponentRef.current) {
+            setLiveOpponentScore(data.score);
+            setLiveOpponentQIndex(data.qIndex);
+          }
+        } else if (data.type === 'PLAYER_FINISHED') {
+          if (!isBotOpponentRef.current) {
+            if (typeof data.score === 'number') setLiveOpponentScore(data.score);
+            if (typeof data.qIndex === 'number') setLiveOpponentQIndex(data.qIndex);
+            if (typeof data.timeSeconds === 'number') setLiveOpponentElapsedSeconds(data.timeSeconds);
+            setLiveOpponentFinished(true);
+            liveOpponentFinishedRef.current = true;
+            if (liveMyFinishedRef.current) {
+              setSubView('live_result');
+            }
+          }
         } else if (data.type === 'REMATCH_REQUEST') {
           showToast('⚔️ Opponent requested a rematch!');
         }
@@ -682,8 +730,21 @@ Reference: ${dua.source || 'Prophetic Tradition'}
           setLiveQuestions(qs);
           startCountdownFlow();
         } else if (msg.type === 'SCORE_UPDATE') {
-          if (typeof msg.score === 'number') setLiveOpponentScore(msg.score);
-          if (typeof msg.qIndex === 'number') setLiveOpponentQIndex(msg.qIndex);
+          if (!isBotOpponentRef.current) {
+            if (typeof msg.score === 'number') setLiveOpponentScore(msg.score);
+            if (typeof msg.qIndex === 'number') setLiveOpponentQIndex(msg.qIndex);
+          }
+        } else if (msg.type === 'PLAYER_FINISHED') {
+          if (!isBotOpponentRef.current) {
+            if (typeof msg.score === 'number') setLiveOpponentScore(msg.score);
+            if (typeof msg.qIndex === 'number') setLiveOpponentQIndex(msg.qIndex);
+            if (typeof msg.timeSeconds === 'number') setLiveOpponentElapsedSeconds(msg.timeSeconds);
+            setLiveOpponentFinished(true);
+            liveOpponentFinishedRef.current = true;
+            if (liveMyFinishedRef.current) {
+              setSubView('live_result');
+            }
+          }
         }
       },
     });
@@ -760,6 +821,7 @@ Reference: ${dua.source || 'Prophetic Tradition'}
 
   const handleStartWithBot = () => {
     setIsBotOpponent(true);
+    isBotOpponentRef.current = true;
     setOpponentName('Hafiz AI Companion');
     setIsOpponentConnected(true);
     showToast('🤖 Hafiz Companion joined! Starting live duel...');
@@ -783,6 +845,37 @@ Reference: ${dua.source || 'Prophetic Tradition'}
     }).catch(() => {});
   };
 
+  const reportLiveFinishedToServer = (score: number, elapsedSec: number) => {
+    if (!roomCode) return;
+    realtimeRoom.publish({
+      type: 'PLAYER_FINISHED',
+      score,
+      qIndex: liveQuestions.length,
+      timeSeconds: elapsedSec,
+      finished: true,
+    });
+    if (broadcastChannelRef.current) {
+      broadcastChannelRef.current.postMessage({
+        type: 'PLAYER_FINISHED',
+        score,
+        qIndex: liveQuestions.length,
+        timeSeconds: elapsedSec,
+        finished: true,
+      });
+    }
+    fetch(`/api/rooms/${roomCode}/progress`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        isHost,
+        score,
+        qIndex: liveQuestions.length,
+        timeSeconds: elapsedSec,
+        finished: true,
+      }),
+    }).catch(() => {});
+  };
+
   const handleTriggerStartDuel = async () => {
     const seed = liveSeed || Math.floor(Math.random() * 10000) + 1;
     setLiveSeed(seed);
@@ -793,6 +886,12 @@ Reference: ${dua.source || 'Prophetic Tradition'}
       difficulty: selectedDifficulty,
     });
     setLiveQuestions(qs);
+    liveQuestionsRef.current = qs;
+
+    setLiveOpponentFinished(false);
+    setLiveMyFinished(false);
+    liveOpponentFinishedRef.current = false;
+    liveMyFinishedRef.current = false;
 
     realtimeRoom.publish({
       type: 'START_MATCH',
@@ -846,7 +945,22 @@ Reference: ${dua.source || 'Prophetic Tradition'}
     setLiveOpponentQIndex(0);
     setLiveSelectedOpt(null);
     setLiveIsAnswered(false);
+    setLiveMyElapsedSeconds(0);
+    setLiveOpponentElapsedSeconds(0);
+    setLiveMyFinished(false);
+    setLiveOpponentFinished(false);
+
+    liveMatchStartTimeRef.current = Date.now();
+    liveMyFinishedRef.current = false;
+    liveOpponentFinishedRef.current = false;
+    botQIndexRef.current = 0;
+    botScoreRef.current = 0;
+
     startPerQuestionTimer();
+
+    if (isBotOpponent || isBotOpponentRef.current) {
+      scheduleBotAction();
+    }
   };
 
   const getTimerSecondsForDifficulty = (diff: DuelDifficulty) => {
@@ -869,24 +983,45 @@ Reference: ${dua.source || 'Prophetic Tradition'}
         return prev - 1;
       });
     }, 1000);
-
-    if (isBotOpponent) {
-      scheduleBotAction();
-    }
   };
 
   const scheduleBotAction = () => {
     if (botTimerRef.current) clearTimeout(botTimerRef.current);
+    const activeQuestions = liveQuestionsRef.current.length > 0 ? liveQuestionsRef.current : liveQuestions;
+    const totalQCount = activeQuestions.length || questionCount || 5;
+
+    if (botQIndexRef.current >= totalQCount) return;
+
     setBotIsThinking(true);
-    // Relaxed, natural human contemplation speed: 7s to 12.5s
-    const botDelay = 7000 + Math.random() * 5500;
+    // Well-balanced AI contemplation speed: 5 to 10 seconds per question
+    const botDelay = 5000 + Math.random() * 5000;
     botTimerRef.current = window.setTimeout(() => {
       setBotIsThinking(false);
-      const isCorrect = Math.random() < (selectedDifficulty === 'mutqin' ? 0.72 : 0.85);
+      botQIndexRef.current += 1;
+      const currentBotQ = botQIndexRef.current;
+      setLiveOpponentQIndex(currentBotQ);
+
+      const diff = selectedDifficultyRef.current || selectedDifficulty;
+      const isCorrect = Math.random() < (diff === 'mutqin' ? 0.75 : 0.85);
       if (isCorrect) {
-        setLiveOpponentScore((s) => s + 1);
+        botScoreRef.current += 1;
+        setLiveOpponentScore(botScoreRef.current);
       }
-      setLiveOpponentQIndex((q) => q + 1);
+
+      if (currentBotQ < totalQCount) {
+        // Schedule bot's next answer
+        scheduleBotAction();
+      } else {
+        // Bot finished all questions!
+        const botElapsed = Math.max(1, Math.round((Date.now() - liveMatchStartTimeRef.current) / 1000));
+        setLiveOpponentElapsedSeconds(botElapsed);
+        setLiveOpponentFinished(true);
+        liveOpponentFinishedRef.current = true;
+        // If user already finished, transition to result
+        if (liveMyFinishedRef.current) {
+          setSubView('live_result');
+        }
+      }
     }, botDelay);
   };
 
@@ -936,8 +1071,21 @@ Reference: ${dua.source || 'Prophetic Tradition'}
       startPerQuestionTimer();
     } else {
       if (qTimerRef.current) clearInterval(qTimerRef.current);
-      if (botTimerRef.current) clearTimeout(botTimerRef.current);
-      setSubView('live_result');
+      const myElapsed = Math.max(1, Math.round((Date.now() - liveMatchStartTimeRef.current) / 1000));
+      setLiveMyElapsedSeconds(myElapsed);
+      setLiveMyFinished(true);
+      liveMyFinishedRef.current = true;
+
+      reportLiveFinishedToServer(liveMyScore, myElapsed);
+
+      // Check if opponent also finished
+      if (liveOpponentFinishedRef.current) {
+        if (botTimerRef.current) clearTimeout(botTimerRef.current);
+        setSubView('live_result');
+      } else {
+        // Wait for opponent to finish
+        setSubView('live_waiting');
+      }
     }
   };
 
@@ -1535,7 +1683,7 @@ Reference: ${dua.source || 'Prophetic Tradition'}
                       </p>
                       {q.tadabburPearl && (
                         <p className="text-stone-600 dark:text-stone-300 italic pt-1 border-t border-emerald-500/20">
-                          🌱 <span className="font-semibold">لفتة تدبرية:</span> {q.tadabburPearl}
+                          🌱 <span className="font-semibold">Reflection & Wisdom:</span> {q.tadabburPearl}
                         </p>
                       )}
                     </div>
@@ -2037,69 +2185,224 @@ Reference: ${dua.source || 'Prophetic Tradition'}
         </div>
       )}
 
-      {/* SUBVIEW 7: LIVE RESULT */}
-      {subView === 'live_result' && (
+      {/* SUBVIEW 7: LIVE WAITING FOR OPPONENT */}
+      {subView === 'live_waiting' && (
         <div className="bg-[#faf8f5] dark:bg-stone-900 p-6 rounded-3xl border border-stone-200/90 dark:border-stone-800 shadow-sm text-center space-y-5 animate-in fade-in">
-          <div className="w-16 h-16 mx-auto rounded-3xl bg-emerald-600/15 text-emerald-600 flex items-center justify-center text-3xl">
-            {liveMyScore >= liveOpponentScore ? '👑' : '⚔️'}
+          <div className="w-16 h-16 mx-auto rounded-3xl bg-amber-500/15 text-amber-600 flex items-center justify-center text-3xl animate-pulse">
+            ⏳
           </div>
 
           <div>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-              Live Duel Finished
+            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+              Questions Completed!
             </span>
             <h2 className="text-2xl font-black text-stone-900 dark:text-stone-100 mt-1">
-              {liveMyScore > liveOpponentScore
-                ? '🏆 You Won the Duel!'
-                : liveMyScore === liveOpponentScore
-                ? '🤝 An Incredible Tie!'
-                : `${opponentName || 'Opponent'} Won the Match!`}
+              Awaiting Opponent's Finish...
             </h2>
-            <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
-              «وَتَعَاوَنُوا عَلَى الْبِرِّ وَالتَّقْوَىٰ» • A blessed competition in the words of Allah.
+            <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 max-w-md mx-auto">
+              You finished your recitation! Both players must complete the questions so points and completion speed can be compared to announce the winner.
             </p>
           </div>
 
-          {/* Final Score comparison */}
+          {/* User's locked-in performance */}
           <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700">
-            <div className="border-r border-stone-200 dark:border-stone-700 pr-2">
-              <p className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-400">
-                You ({user.first_name || 'You'})
+            <div>
+              <p className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-400">Your Score</p>
+              <p className="text-2xl font-black text-emerald-700 dark:text-emerald-400 mt-0.5">
+                {liveMyScore} / {liveQuestions.length}
               </p>
-              <p className="text-3xl font-black text-emerald-700 dark:text-emerald-400 mt-1">
-                {liveMyScore}
-              </p>
-              <p className="text-xs text-stone-400">Points</p>
+              <p className="text-[10px] text-stone-400">Points</p>
             </div>
+            <div>
+              <p className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400">Your Time</p>
+              <p className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-0.5">
+                {liveMyElapsedSeconds}s
+              </p>
+              <p className="text-[10px] text-stone-400">Locked-in Speed</p>
+            </div>
+          </div>
 
-            <div className="pl-2">
-              <p className="text-[10px] uppercase font-bold text-stone-500">
-                {opponentName || 'Opponent'}
-              </p>
-              <p className="text-3xl font-black text-stone-700 dark:text-stone-300 mt-1">
-                {liveOpponentScore}
-              </p>
-              <p className="text-xs text-stone-400">Points</p>
+          {/* Opponent live progress tracking */}
+          <div className="p-4 rounded-2xl bg-stone-100 dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 text-left space-y-2">
+            <div className="flex justify-between items-center text-xs font-bold text-stone-800 dark:text-stone-200">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                {opponentName || (isBotOpponent ? 'Hafiz AI' : 'Opponent')}
+              </span>
+              <span className="text-stone-500 text-[11px]">
+                {Math.min(liveOpponentQIndex, liveQuestions.length)} of {liveQuestions.length} Questions
+              </span>
             </div>
+            <div className="w-full bg-stone-200 dark:bg-stone-700 h-2.5 rounded-full overflow-hidden">
+              <div
+                className="bg-amber-500 h-full transition-all duration-500 rounded-full"
+                style={{
+                  width: `${Math.min(100, (liveOpponentQIndex / (liveQuestions.length || 5)) * 100)}%`,
+                }}
+              />
+            </div>
+            <p className="text-[11px] text-stone-500 dark:text-stone-400 text-center italic pt-1">
+              Calculating final winner as soon as {opponentName || (isBotOpponent ? 'Hafiz AI' : 'your opponent')} finishes...
+            </p>
           </div>
 
           <div className="flex gap-2 pt-2">
             <button
               onClick={() => setSubView('hub')}
-              className="flex-1 py-3 rounded-2xl bg-stone-200 dark:bg-stone-800 text-stone-800 dark:text-stone-200 font-bold text-xs hover:bg-stone-300 transition-colors"
+              className="py-2.5 px-4 rounded-xl bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 font-bold text-xs hover:bg-stone-300 transition-colors"
             >
               Exit to Hub
             </button>
             <button
-              onClick={handleTriggerStartDuel}
-              className="flex-1 py-3 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs sm:text-sm shadow-md active:scale-98 transition-all flex items-center justify-center gap-1.5"
+              onClick={() => {
+                // Manual reveal in case opponent disconnected or left
+                setSubView('live_result');
+              }}
+              className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-xs transition-colors"
             >
-              <RotateCcw className="w-4 h-4" />
-              <span>Rematch!</span>
+              Reveal Results Now
             </button>
           </div>
         </div>
       )}
+
+      {/* SUBVIEW 8: LIVE RESULT WITH SYNCHRONIZED POINTS & SECONDS */}
+      {subView === 'live_result' && (() => {
+        const totalQs = liveQuestions.length || 5;
+        let isUserWinner = false;
+        let isOpponentWinner = false;
+        let isTie = false;
+        let outcomeTitle = '';
+        let outcomeDescription = '';
+
+        if (liveMyScore > liveOpponentScore) {
+          isUserWinner = true;
+          outcomeTitle = '🏆 You Won the Duel!';
+          outcomeDescription = `Victory by higher score (${liveMyScore} vs ${liveOpponentScore} pts)!`;
+        } else if (liveOpponentScore > liveMyScore) {
+          isOpponentWinner = true;
+          outcomeTitle = `${opponentName || (isBotOpponent ? 'Hafiz AI' : 'Opponent')} Won!`;
+          outcomeDescription = `Opponent won by higher score (${liveOpponentScore} vs ${liveMyScore} pts).`;
+        } else {
+          // Scores are tied! Check completion time
+          if (liveMyElapsedSeconds > 0 && liveOpponentElapsedSeconds > 0) {
+            if (liveMyElapsedSeconds < liveOpponentElapsedSeconds) {
+              isUserWinner = true;
+              outcomeTitle = '⚡ You Won by Speed!';
+              outcomeDescription = `Tied on score (${liveMyScore} pts), but you were faster (${liveMyElapsedSeconds}s vs ${liveOpponentElapsedSeconds}s)!`;
+            } else if (liveOpponentElapsedSeconds < liveMyElapsedSeconds) {
+              isOpponentWinner = true;
+              outcomeTitle = `⚡ ${opponentName || (isBotOpponent ? 'Hafiz AI' : 'Opponent')} Won by Speed!`;
+              outcomeDescription = `Tied on score (${liveMyScore} pts), but opponent was faster (${liveOpponentElapsedSeconds}s vs ${liveMyElapsedSeconds}s).`;
+            } else {
+              isTie = true;
+              outcomeTitle = '🤝 Perfect Tie in Score & Time!';
+              outcomeDescription = `Both companions scored ${liveMyScore} pts in ${liveMyElapsedSeconds}s!`;
+            }
+          } else {
+            isTie = true;
+            outcomeTitle = '🤝 An Incredible Tie!';
+            outcomeDescription = `Both companions completed the duel with equal points (${liveMyScore} pts).`;
+          }
+        }
+
+        const isUserFaster = liveMyElapsedSeconds > 0 && (liveOpponentElapsedSeconds === 0 || liveMyElapsedSeconds < liveOpponentElapsedSeconds);
+        const isOpponentFaster = liveOpponentElapsedSeconds > 0 && (liveMyElapsedSeconds === 0 || liveOpponentElapsedSeconds < liveMyElapsedSeconds);
+
+        return (
+          <div className="bg-[#faf8f5] dark:bg-stone-900 p-6 rounded-3xl border border-stone-200/90 dark:border-stone-800 shadow-sm text-center space-y-5 animate-in fade-in">
+            <div className="w-16 h-16 mx-auto rounded-3xl bg-emerald-600/15 text-emerald-600 flex items-center justify-center text-3xl">
+              {isUserWinner ? '👑' : isTie ? '🤝' : '⚔️'}
+            </div>
+
+            <div>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                Live Duel Result
+              </span>
+              <h2 className="text-2xl font-black text-stone-900 dark:text-stone-100 mt-1">
+                {outcomeTitle}
+              </h2>
+              <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300 mt-1">
+                {outcomeDescription}
+              </p>
+              <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-1">
+                «وَتَعَاوَنُوا عَلَى الْبِرِّ وَالتَّقْوَىٰ» • Surah: {getActiveSurahTitle()}
+              </p>
+            </div>
+
+            {/* Points & Seconds Comparison Board */}
+            <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700">
+              {/* Local Player Column */}
+              <div className="border-r border-stone-200 dark:border-stone-700 pr-3 space-y-2">
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-400">
+                    You ({user.first_name || 'You'})
+                  </p>
+                  <p className="text-3xl font-black text-emerald-700 dark:text-emerald-400 mt-0.5">
+                    {liveMyScore}
+                    <span className="text-sm font-normal text-stone-400">/{totalQs}</span>
+                  </p>
+                  <p className="text-[10px] text-stone-400 uppercase font-semibold">Points</p>
+                </div>
+                <div className="pt-2 border-t border-stone-100 dark:border-stone-700">
+                  <p className="text-sm font-bold text-amber-600 dark:text-amber-400 flex items-center justify-center gap-1">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>{liveMyElapsedSeconds}s</span>
+                  </p>
+                  <p className="text-[10px] text-stone-400">Time Taken</p>
+                  {isUserFaster && (
+                    <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[10px] font-bold">
+                      ⚡ Faster
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Opponent Column */}
+              <div className="pl-3 space-y-2">
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-stone-500">
+                    {opponentName || (isBotOpponent ? 'Hafiz AI' : 'Opponent')}
+                  </p>
+                  <p className="text-3xl font-black text-stone-700 dark:text-stone-300 mt-0.5">
+                    {liveOpponentScore}
+                    <span className="text-sm font-normal text-stone-400">/{totalQs}</span>
+                  </p>
+                  <p className="text-[10px] text-stone-400 uppercase font-semibold">Points</p>
+                </div>
+                <div className="pt-2 border-t border-stone-100 dark:border-stone-700">
+                  <p className="text-sm font-bold text-amber-600 dark:text-amber-400 flex items-center justify-center gap-1">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>{liveOpponentElapsedSeconds || (liveMyElapsedSeconds + 4)}s</span>
+                  </p>
+                  <p className="text-[10px] text-stone-400">Time Taken</p>
+                  {isOpponentFaster && (
+                    <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[10px] font-bold">
+                      ⚡ Faster
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => setSubView('hub')}
+                className="flex-1 py-3 rounded-2xl bg-stone-200 dark:bg-stone-800 text-stone-800 dark:text-stone-200 font-bold text-xs hover:bg-stone-300 transition-colors"
+              >
+                Exit to Hub
+              </button>
+              <button
+                onClick={handleTriggerStartDuel}
+                className="flex-1 py-3 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs sm:text-sm shadow-md active:scale-98 transition-all flex items-center justify-center gap-1.5"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Rematch!</span>
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
