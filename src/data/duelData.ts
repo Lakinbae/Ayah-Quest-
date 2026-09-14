@@ -843,6 +843,32 @@ export function getQuestionsBySeed(
 }
 
 /**
+ * Production custom domain configuration:
+ * Ensures all challenge and duel invitation links cleanly display the official
+ * domain (https://ayahquest.pro.et) rather than cloudflare worker preview subdomains.
+ */
+export function getAppBaseUrl(): string {
+  // If explicitly provided in environment, prioritize it
+  const envUrl = (import.meta as any).env?.VITE_PUBLIC_APP_URL;
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim().length > 0) {
+    return envUrl.trim().replace(/\/+$/, '');
+  }
+
+  // If in browser context:
+  if (typeof window !== 'undefined' && window.location) {
+    const hostname = window.location.hostname;
+    // If running on a workers.dev preview or test subdomain containing personal identifier,
+    // seamlessly use the official domain instead so users never see personal names.
+    if (hostname.includes('.workers.dev') || hostname.includes('lakin-awel')) {
+      return 'https://ayahquest.pro.et';
+    }
+    return `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, '');
+  }
+
+  return 'https://ayahquest.pro.et';
+}
+
+/**
  * Generate a friendly Islamic-themed room code (e.g. HIFZ42, NOOR18)
  */
 export function generateRoomCode(): string {

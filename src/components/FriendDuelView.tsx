@@ -16,6 +16,7 @@ import {
   generateRoomCode,
   formatTelegramChallengeMessage,
   shareToTelegram,
+  getAppBaseUrl,
   SINCERE_DUAS_FOR_FRIENDS,
   SincereDua
 } from '../data/duelData';
@@ -496,7 +497,7 @@ export const FriendDuelView: React.FC<FriendDuelViewProps> = ({
 
   // Telegram deep-link URL generator
   const getChallengeUrl = () => {
-    const base = window.location.origin + window.location.pathname;
+    const base = getAppBaseUrl();
     const name = encodeURIComponent(user.first_name || 'Hafiz Friend');
     return `${base}?duel=challenge&by=${name}&score=${asynScore}&time=${asynElapsedSeconds}&seed=${asynSeed}&surah=${selectedSurahNum}&diff=${selectedDifficulty}&cnt=${questionCount}`;
   };
@@ -550,7 +551,7 @@ export const FriendDuelView: React.FC<FriendDuelViewProps> = ({
   };
 
   const handleShareDuaTelegram = (dua: SincereDua) => {
-    const appUrl = `${window.location.origin}${window.location.pathname}`;
+    const appUrl = getAppBaseUrl();
     const text = 
 `🤲 *Dua for my Companion in Faith & Quran (دعاء بظهر الغيب):*
 
@@ -1946,7 +1947,7 @@ Reference: ${dua.source || 'Prophetic Tradition'}
               <div className="flex gap-2">
                 <button
                   onClick={() => {
-                    const url = `${window.location.origin}${window.location.pathname}?room=${roomCode}&role=guest`;
+                    const url = `${getAppBaseUrl()}?room=${roomCode}&role=guest`;
                     navigator.clipboard.writeText(`⚡ Join my Live Quran Duel Room!\nRoom Code: ${roomCode}\nSurah: ${getActiveSurahTitle()}\nJoin as my opponent: ${url}`);
                     showToast('Room code & link copied to clipboard!');
                   }}
@@ -1957,7 +1958,7 @@ Reference: ${dua.source || 'Prophetic Tradition'}
                 </button>
                 <button
                   onClick={() => {
-                    const url = `${window.location.origin}${window.location.pathname}?room=${roomCode}&role=guest`;
+                    const url = `${getAppBaseUrl()}?room=${roomCode}&role=guest`;
                     const text = `⚡ Join my Live Quran Duel Room!\nRoom Code: ${roomCode}\nSurah: ${getActiveSurahTitle()}\nTap this link to enter as my opponent: ${url}`;
                     shareToTelegram(url, text);
                   }}
